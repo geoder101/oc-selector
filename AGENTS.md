@@ -4,19 +4,28 @@ Cross-platform Python 3.12 CLI that wraps the native `opencode` executable: it k
 registry of named settings profiles, selects the default (or a named profile), and
 forwards all remaining args to `opencode` byte-for-byte.
 
-## Commands (uv-managed)
+## Commands (just-managed)
+
+Development is driven by the [just](https://github.com/casey/just) task runner.
+`just check` is the single gate: lock-check, format-check, lint, typecheck, test,
+build — in that order. Every operation has a recipe:
 
 ```bash
-uv sync                     # setup
-uv run pytest               # tests  (single: uv run pytest tests/test_x.py::test_y)
-uv run ruff check .         # lint
-uv run ruff format .        # format
-uv run basedpyright         # type check
-uv build                    # build (success message goes to STDERR, not stdout)
+just sync          # verify the lockfile, then sync the dev environment
+just check         # the single gate (lock-check, format-check, lint, typecheck, test, build)
+just test <args>   # tests  (single: just test tests/test_x.py::test_y)
+just format        # apply the formatter
+just format-check  # check formatting without changing files
+just lint          # run the linter
+just typecheck     # type-check with basedpyright
+just cli <args>    # run the CLI, forwarding args to oc-selector
+just build         # build (success message goes to STDERR, not stdout)
 ```
 
-CI gate order is `ruff check .` → `basedpyright` → `pytest` (see
-`.github/workflows/release.yml`). Run all three before considering work done.
+Without Just (machines that lack it), the raw equivalents are: `uv lock --check &&
+uv sync --locked --group dev`, `uv run ruff format .`, `uv run ruff check .`,
+`uv run basedpyright`, `uv run pytest`, and `uv build`. Run `just check` before
+considering work done.
 
 ## Quality gate quirks (these will bite)
 

@@ -119,22 +119,25 @@ directory = "personal-dir"
 
 ## Development
 
+Development is driven by the [just](https://github.com/casey/just) task runner.
+`just check` is the single gate: it runs lock-check, format-check, lint, typecheck,
+test, and build in order. Every operation has a recipe:
+
 ```bash
-# Setup
-uv sync
-
-# Run tests
-uv run pytest
-
-# Lint
-uv run ruff check .
-
-# Type check
-uv run basedpyright
-
-# Build
-uv build
+just sync          # verify the lockfile, then sync the dev environment
+just check         # the single gate (lock-check, format-check, lint, typecheck, test, build)
+just test          # run the test suite (forward extra args to pytest)
+just format        # apply the formatter
+just format-check  # check formatting without changing files
+just lint          # run the linter
+just typecheck     # type-check with basedpyright
+just cli <args>    # run the CLI, forwarding args to oc-selector
+just build         # build the sdist and wheel
 ```
+
+Without Just (machines that lack it), the equivalent raw commands are:
+`uv lock --check && uv sync --locked --group dev`, `uv run ruff format .`,
+`uv run ruff check .`, `uv run basedpyright`, `uv run pytest`, and `uv build`.
 
 ## License
 
