@@ -50,6 +50,8 @@ ignore = ["CPY001", "TRY003", "EM101", "EM102"]
 # tools/verify.py is a subprocess evidence recorder; it intentionally shells out
 # to arbitrary commands and writes to caller-supplied evidence paths.
 "tools/verify.py" = ["S603", "S607", "S108", "INP001"]
+# Shell completion scripts are inherently long single-line constructs.
+"src/oc_selector/completion.py" = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
