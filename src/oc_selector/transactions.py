@@ -23,9 +23,10 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import cast
+from typing import ClassVar
 
 import portalocker
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from oc_selector.errors import MaintenanceError
 
@@ -281,33 +282,74 @@ def journal_to_dict(j: Journal) -> dict[str, object]:
     }
 
 
+class ResourceRecord(BaseModel):
+    """Read-side record for a single journal resource (parse-only; never mutated)."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        strict=True,
+        validate_default=True,
+    )
+
+    path: str
+    preimage_hash: str | None = None
+    postimage_hash: str | None = None
+    existed: bool = False
+    mode: int | None = None
+
+
+class JournalRecord(BaseModel):
+    """Read-side record for a journal file (parse-only; never mutated).
+
+    Field declaration order matches ``journal_to_dict`` exactly.
+    """
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        strict=True,
+        validate_default=True,
+    )
+
+    id: str
+    operation: str
+    phase: str
+    resources: list[ResourceRecord] = []
+    affected_profiles: list[str] = []
+    pid: int = 0
+    host: str = ""
+    timestamp: str = ""
+
+
 def read_journal(path: Path) -> Journal | None:
-    """Read a journal from disk. Returns None if not found."""
+    """Read a journal from disk. Returns None if not found or unreadable."""
     if not path.exists():
         return None
     try:
-        data = cast("dict[str, object]", json.loads(path.read_text()))
-        return Journal(
-            id=cast("str", data["id"]),
-            operation=cast("str", data["operation"]),
-            phase=JournalPhase(cast("str", data["phase"])),
-            resources=[
-                ResourceEntry(
-                    path=cast("str", r["path"]),
-                    preimage_hash=cast("str | None", r.get("preimage_hash")),
-                    postimage_hash=cast("str | None", r.get("postimage_hash")),
-                    existed=cast("bool", r.get("existed", False)),
-                    mode=cast("int | None", r.get("mode")),
-                )
-                for r in cast("list[dict[str, object]]", data.get("resources", []))
-            ],
-            affected_profiles=cast("list[str]", data.get("affected_profiles", [])),
-            pid=cast("int", data.get("pid", 0)),
-            host=cast("str", data.get("host", "")),
-            timestamp=cast("str", data.get("timestamp", "")),
-        )
-    except (json.JSONDecodeError, KeyError, ValueError):
+        record = JournalRecord.model_validate(json.loads(path.read_text()))
+        phase = JournalPhase(record.phase)
+    except (json.JSONDecodeError, ValidationError, ValueError):
         return None
+    return Journal(
+        id=record.id,
+        operation=record.operation,
+        phase=phase,
+        resources=[
+            ResourceEntry(
+                path=r.path,
+                preimage_hash=r.preimage_hash,
+                postimage_hash=r.postimage_hash,
+                existed=r.existed,
+                mode=r.mode,
+            )
+            for r in record.resources
+        ],
+        affected_profiles=list(record.affected_profiles),
+        pid=record.pid,
+        host=record.host,
+        timestamp=record.timestamp,
+    )
 
 
 def find_pending_journals(state_root: Path) -> list[Journal]:

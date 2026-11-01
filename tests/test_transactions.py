@@ -12,6 +12,7 @@ Covers:
 
 from __future__ import annotations
 
+import json
 from pathlib import Path  # noqa: TC003
 from typing import cast
 
@@ -119,6 +120,50 @@ class TestJournal:
     def test_happy_read_missing_journal(self, tmp_path: Path) -> None:
         result = read_journal(tmp_path / "nonexistent.json")
         assert result is None
+
+    def test_golden_journal_bytes_exact_key_order(self, state_root: Path) -> None:
+        """Golden write-side shape: raw journal file bytes pin the exact key order.
+
+        Journal keys: id, operation, phase, resources, affected_profiles, pid, host, timestamp.
+        Resource keys: path, preimage_hash, postimage_hash, existed, mode.
+        ``phase`` is serialized as its ``.value`` string.
+        """
+        j = Journal(
+            id="golden-id",
+            operation="init",
+            phase=JournalPhase.PREPARED,
+            resources=[ResourceEntry(path="/tmp/golden.txt", existed=True, mode=420)],
+            affected_profiles=["work"],
+            pid=1234,
+            host="testhost",
+            timestamp="2026-01-01T00:00:00",
+        )
+        journal_path = state_root / "journals" / "golden.json"
+        journal_path.parent.mkdir(parents=True, exist_ok=True)
+        journal_path.write_text(json.dumps(journal_to_dict(j), indent=2))
+        golden = (
+            "{\n"
+            '  "id": "golden-id",\n'
+            '  "operation": "init",\n'
+            '  "phase": "prepared",\n'
+            '  "resources": [\n'
+            "    {\n"
+            '      "path": "/tmp/golden.txt",\n'
+            '      "preimage_hash": null,\n'
+            '      "postimage_hash": null,\n'
+            '      "existed": true,\n'
+            '      "mode": 420\n'
+            "    }\n"
+            "  ],\n"
+            '  "affected_profiles": [\n'
+            '    "work"\n'
+            "  ],\n"
+            '  "pid": 1234,\n'
+            '  "host": "testhost",\n'
+            '  "timestamp": "2026-01-01T00:00:00"\n'
+            "}"
+        )
+        assert journal_path.read_bytes() == golden.encode()
 
 
 class TestPendingJournals:
