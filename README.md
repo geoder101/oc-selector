@@ -42,32 +42,36 @@ oc-selector --model openai/gpt-4 "fix the bug"
 
 | Command | Description |
 |---------|-------------|
-| `oc-selector init` | Initialize configuration and registry |
-| `oc-selector create <name> <dir>` | Create a new profile |
-| `oc-selector edit <name>` | Edit an existing profile |
-| `oc-selector set-default <name>` | Set the default profile |
-| `oc-selector list` | List all registered profiles |
-| `oc-selector diagnostics` | Collect and display diagnostics |
-| `oc-selector completion <shell>` | Generate shell completion |
-| `oc-selector recover` | Recover from pending transactions |
+| `oc-selector init [--no-backup] [--dry-run] [--recover]` | Initialize configuration and registry, or recover pending transactions |
+| `oc-selector create <name> [directory] [--model MODEL] [--no-interactive] [--dry-run]` | Create a new profile |
+| `oc-selector edit <name> [--directory DIR] [--model MODEL] [--dry-run]` | Edit an existing profile |
+| `oc-selector set-default <name> [--dry-run]` | Set the default profile |
+| `oc-selector list [--json]` | List all registered profiles |
+| `oc-selector info [--json]` | Collect and display diagnostics |
+| `oc-selector sync [PROFILE] [--all] [--dry-run]` | Sync the host package into the selected profile's directory |
+| `oc-selector upgrade-omo [PROFILE] [--version VERSION] [--all] [--dry-run]` | Upgrade the OMO config to a target version |
+| `oc-selector completion <shell> [--alias NAME]` | Generate shell completion |
+| `oc-selector help [--version]` | Show wrapper usage and the management grammar |
 
 ### Create Options
 
 ```bash
-oc-selector create <name> <directory> [--model MODEL_ID]
+oc-selector create <name> [directory] [--model MODEL_ID] [--no-interactive] [--dry-run]
 ```
 
 - `name`: Profile name (lowercase alphanumeric + hyphens)
-- `directory`: Directory path for this profile
+- `directory`: Directory path for this profile (prompted if omitted)
 - `--model, -m`: Optional model ID (e.g., `openai/gpt-4`)
+- `--no-interactive`: Do not prompt; `directory` must be given as an argument
+- `--dry-run`: Preview without writing
 
 ### Edit Options
 
 ```bash
-oc-selector edit <name> [--directory DIR] [--model MODEL_ID]
+oc-selector edit <name> [--directory DIR] [--model MODEL_ID] [--dry-run]
 ```
 
-Only specified fields are changed; others are preserved.
+Only specified fields are changed; others are preserved. `--dry-run` previews without writing.
 
 ## Shell Completion
 

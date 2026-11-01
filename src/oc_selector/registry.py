@@ -118,6 +118,7 @@ class ProfileEntry(BaseModel):
     """A single profile entry in the registry."""
 
     directory: str = Field(min_length=1)
+    model: str | None = None
     omo_profile: str | None = None
 
     @field_serializer("omo_profile")
@@ -194,7 +195,7 @@ def _doc_to_registry(doc: tomlkit.TOMLDocument) -> Registry:
         if not isinstance(raw_entry, dict):
             raise RegistryError(f"Profile {name!r} is not a table")
         entry_doc = cast("dict[str, object]", raw_entry)
-        known_profile_keys = {"directory", "omo_profile"}
+        known_profile_keys = {"directory", "omo_profile", "model"}
         kwargs: dict[str, str | None] = {}
         for key in entry_doc:
             if key not in known_profile_keys:
@@ -205,6 +206,7 @@ def _doc_to_registry(doc: tomlkit.TOMLDocument) -> Registry:
             raise RegistryError(f"Profile {name!r} missing required 'directory'")
         profiles[name] = ProfileEntry(
             directory=kwargs["directory"],  # type: ignore[arg-type]
+            model=kwargs.get("model"),
             omo_profile=kwargs.get("omo_profile"),
         )
     try:
@@ -228,6 +230,8 @@ def registry_to_toml(reg: Registry) -> str:
     for name, entry in reg.profiles.items():
         ptable = tomlkit.table()
         ptable["directory"] = entry.directory
+        if entry.model is not None:
+            ptable["model"] = entry.model
         if entry.omo_profile is not None:
             ptable["omo_profile"] = entry.omo_profile
         profiles_table[name] = ptable

@@ -104,6 +104,8 @@ def sync_host_package(
     project_root: Path,
     state_root: Path,
     target_version: str | None = None,
+    *,
+    dry_run: bool = False,
 ) -> SyncResult:
     """Sync the host package to the target version.
 
@@ -111,6 +113,8 @@ def sync_host_package(
         project_root: Path to the project root.
         state_root: Path to the state root.
         target_version: Target version (None for latest).
+        dry_run: When set, report the would-be sync without running the package
+            manager or writing a transaction.
 
     Returns:
         A ``SyncResult`` describing the outcome.
@@ -133,6 +137,14 @@ def sync_host_package(
             package_name=info.name,
             version=info.version,
             message="Already at target version",
+        )
+
+    if dry_run:
+        return SyncResult(
+            success=True,
+            package_name=info.name,
+            version=info.version,
+            message=f"Dry run: would sync {info.name} to {target_version or 'latest'}",
         )
 
     # Use transaction for mutation

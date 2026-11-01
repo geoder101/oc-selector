@@ -46,6 +46,17 @@ class UpgradeResult:
     error: str | None = None
 
 
+def _validate_config_dict(data: dict[str, object], schema: OmoSchema) -> str | None:
+    """Return an error message if ``data`` violates ``schema``, else ``None``."""
+    for field in schema.required_fields:
+        if field not in data:
+            return f"Missing required field: {field}"
+    version = data.get("version")
+    if version != schema.version:
+        return f"Version mismatch: expected {schema.version}, got {version}"
+    return None
+
+
 def validate_omo_config(
     config_path: Path,
     schema: OmoSchema,
@@ -75,17 +86,9 @@ def validate_omo_config(
         raise SchemaValidationError("Config must be a JSON object")
     data = cast("dict[str, object]", raw)
 
-    # Check required fields
-    for field in schema.required_fields:
-        if field not in data:
-            raise SchemaValidationError(f"Missing required field: {field}")
-
-    # Check version
-    version = data.get("version")
-    if version != schema.version:
-        raise SchemaValidationError(
-            f"Version mismatch: expected {schema.version}, got {version}",
-        )
+    problem = _validate_config_dict(data, schema)
+    if problem is not None:
+        raise SchemaValidationError(problem)
 
     return data
 
@@ -95,6 +98,8 @@ def run_omo_upgrade(
     schema: OmoSchema,
     state_root: Path,
     new_config: dict[str, object] | None = None,
+    *,
+    dry_run: bool = False,
 ) -> UpgradeResult:
     """Run a schema-validated OMO upgrade.
 
@@ -103,6 +108,8 @@ def run_omo_upgrade(
         schema: The target schema.
         state_root: Path to the state root.
         new_config: New config content (None for in-place validation).
+        dry_run: When set with a ``new_config``, validate and report the
+            would-be upgrade without writing the config or a transaction.
 
     Returns:
         An ``UpgradeResult`` describing the outcome.
@@ -135,6 +142,22 @@ def run_omo_upgrade(
                 message="Validation failed",
                 error=str(exc),
             )
+
+    if dry_run:
+        problem = _validate_config_dict(new_config, schema)
+        will_upgrade = problem is None
+        message = (
+            f"Dry run: would upgrade from {current_version} to {schema.version}"
+            if will_upgrade
+            else "New config validation failed"
+        )
+        return UpgradeResult(
+            success=will_upgrade,
+            from_version=current_version,
+            to_version=schema.version,
+            message=message,
+            error=problem,
+        )
 
     # Validate new config against schema
     try:

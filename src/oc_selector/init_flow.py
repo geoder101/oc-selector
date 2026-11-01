@@ -22,7 +22,7 @@ from oc_selector.errors import (
     RegistryError,
     TransactionError,
 )
-from oc_selector.paths import resolve_config_parent, state_root
+from oc_selector.paths import registry_path_for, resolve_config_parent, state_root
 from oc_selector.registry import (
     ProfileEntry,
     Registry,
@@ -44,6 +44,7 @@ class InitResult:
     created_parent: bool
     created_registry: bool
     already_initialized: bool
+    dry_run: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +69,9 @@ class RecoveryResult:
 def run_init(
     config_parent: Path | None = None,
     registry_path: Path | None = None,
+    *,
+    no_backup: bool = False,  # noqa: ARG001  # pyright: ignore[reportUnusedParameter]
+    dry_run: bool = False,
 ) -> InitResult:
     """Run generic init: detect existing config, create missing parent, create empty registry.
 
@@ -76,9 +80,14 @@ def run_init(
     Args:
         config_parent: Override config parent path (for testing).
         registry_path: Override registry path (for testing).
+        no_backup: Accepted for grammar parity. Generic init only creates missing
+            resources and never rewrites existing state, so it performs no backup;
+            this flag is therefore intentionally inert here.
+        dry_run: When set, write nothing and instead report what *would* be created;
+            ``created_parent``/``created_registry`` reflect the would-be outcome.
 
     Returns:
-        An ``InitResult`` describing what was created.
+        An ``InitResult`` describing what was (or would be) created.
 
     Raises:
         ``RegistryError`` if the config parent cannot be created.
@@ -86,7 +95,17 @@ def run_init(
 
     """
     parent = config_parent or resolve_config_parent()
-    reg_path = registry_path or (parent / "config.toml")
+    reg_path = registry_path or registry_path_for(parent)
+
+    if dry_run:
+        return InitResult(
+            config_parent=parent,
+            registry_path=reg_path,
+            created_parent=not parent.exists(),
+            created_registry=not reg_path.exists(),
+            already_initialized=parent.exists(),
+            dry_run=True,
+        )
 
     created_parent = False
     created_registry = False
@@ -112,6 +131,7 @@ def run_init(
                 default_profile="default",
                 profiles={"default": ProfileEntry(directory="default")},
             )
+            reg_path.parent.mkdir(parents=True, exist_ok=True)
             reg_path.write_text(registry_to_toml(empty))
             created_registry = True
         except OSError as exc:

@@ -38,9 +38,14 @@ def state_root() -> Path:
     return resolve_config_parent() / "oc-selector"
 
 
+def registry_path_for(parent: Path) -> Path:
+    """Return the registry TOML path under an explicit config parent."""
+    return parent / "oc-selector" / "config.toml"
+
+
 def registry_path() -> Path:
     """Return the registry TOML path: ``<state>/config.toml``."""
-    return state_root() / "config.toml"
+    return registry_path_for(resolve_config_parent())
 
 
 def omo_config_path() -> Path:

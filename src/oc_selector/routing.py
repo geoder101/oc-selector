@@ -86,12 +86,12 @@ def route(argv: list[str], registry: Registry | None) -> NativeRoute | Managemen
 
 # --- Management grammar validation (exact grammar) ---
 
-_GRAMMAR_DOC = """\
+GRAMMAR_DOC = """\
 list [--json]
 info [--json]
 init [--no-backup] [--dry-run] [--recover]
-create NAME [--no-interactive] [--dry-run]
-edit PROFILE [--dry-run]
+create NAME [DIRECTORY] [--model MODEL] [--no-interactive] [--dry-run]
+edit PROFILE [--directory DIR] [--model MODEL] [--dry-run]
 set-default PROFILE [--dry-run]
 sync [PROFILE] [--all] [--dry-run]
 upgrade-omo [PROFILE] [--version VERSION] [--all] [--dry-run]
@@ -110,14 +110,16 @@ _GRAMMAR: dict[str, _CmdSpec] = {
     "list": _CmdSpec(frozenset({"--json"}), 0),
     "info": _CmdSpec(frozenset({"--json"}), 0),
     "init": _CmdSpec(frozenset({"--no-backup", "--dry-run", "--recover"}), 0),
-    "create": _CmdSpec(frozenset({"--no-interactive", "--dry-run"}), 1),
-    "edit": _CmdSpec(frozenset({"--dry-run"}), 1),
+    "create": _CmdSpec(frozenset({"--model", "--no-interactive", "--dry-run"}), 2),
+    "edit": _CmdSpec(frozenset({"--directory", "--model", "--dry-run"}), 1),
     "set-default": _CmdSpec(frozenset({"--dry-run"}), 1),
     "sync": _CmdSpec(frozenset({"--all", "--dry-run"}), 1),
     "upgrade-omo": _CmdSpec(frozenset({"--version", "--all", "--dry-run"}), 1),
     "completion": _CmdSpec(frozenset({"--alias"}), 1),
     "help": _CmdSpec(frozenset({"--version"}), 0),
 }
+
+_VALUE_FLAGS: frozenset[str] = frozenset({"--version", "--alias", "--model", "--directory"})
 
 
 def validate_management_args(command: str, args: tuple[str, ...]) -> None:  # noqa: C901, PLR0912
@@ -140,18 +142,14 @@ def validate_management_args(command: str, args: tuple[str, ...]) -> None:  # no
             # Check if it's a known flag
             if tok not in allowed_flags:
                 raise ArgumentError(f"Unsupported option {tok!r} for {command!r}")
-            # --version and --alias take a value
-            if tok in ("--version", "--alias"):
+            if tok in _VALUE_FLAGS:
                 i += 1
                 if i >= len(args):
                     raise ArgumentError(f"Option {tok!r} requires a value")
                 value = args[i]
-                if tok == "--version":
-                    # Validate version string is non-empty
-                    if not value:
-                        raise ArgumentError("--version requires a non-empty value")
-                elif tok == "--alias":
-                    # Validate alias name
+                if not value:
+                    raise ArgumentError(f"Option {tok!r} requires a non-empty value")
+                if tok == "--alias":
                     validate_profile_name(value)
             if tok == "--recover" and ("--no-backup" in args or "--dry-run" in args):
                 raise ArgumentError("--recover cannot combine with --no-backup or --dry-run")

@@ -93,6 +93,8 @@ def run_create_wizard(
     inp: CreateProfileInput,
     registry_path: Path,
     state_root: Path,
+    *,
+    dry_run: bool = False,
 ) -> WizardResult:
     """Run guided create wizard.
 
@@ -100,6 +102,7 @@ def run_create_wizard(
         inp: Typed create input.
         registry_path: Path to the registry file.
         state_root: Path to the state root.
+        dry_run: When set, validate and report the would-be creation without writing.
 
     Returns:
         A ``WizardResult`` describing the outcome.
@@ -135,9 +138,17 @@ def run_create_wizard(
             error=f"Profile {inp.name!r} already exists",
         )
 
+    if dry_run:
+        return WizardResult(
+            success=True,
+            profile_name=inp.name,
+            message=f"Dry run: would create profile {inp.name!r} -> {inp.directory}",
+        )
+
     # Create new entry
     entry = ProfileEntry(
         directory=inp.directory,
+        model=inp.model,
         omo_profile=inp.omo_profile,
     )
 
@@ -180,6 +191,8 @@ def run_edit_wizard(
     inp: EditProfileInput,
     registry_path: Path,
     state_root: Path,
+    *,
+    dry_run: bool = False,
 ) -> WizardResult:
     """Run guided edit wizard.
 
@@ -187,6 +200,7 @@ def run_edit_wizard(
         inp: Typed edit input.
         registry_path: Path to the registry file.
         state_root: Path to the state root.
+        dry_run: When set, validate and report the would-be edit without writing.
 
     Returns:
         A ``WizardResult`` describing the outcome.
@@ -224,9 +238,19 @@ def run_edit_wizard(
             error=str(exc),
         )
 
+    if dry_run:
+        new_dir = inp.directory if inp.directory is not None else existing.directory
+        new_model = inp.model if inp.model is not None else existing.model
+        return WizardResult(
+            success=True,
+            profile_name=inp.name,
+            message=f"Dry run: would edit profile {inp.name!r} -> directory={new_dir}, model={new_model}",
+        )
+
     # Build updated entry
     new_entry = ProfileEntry(
         directory=inp.directory if inp.directory is not None else existing.directory,
+        model=inp.model if inp.model is not None else existing.model,
         omo_profile=inp.omo_profile if inp.omo_profile is not None else existing.omo_profile,
     )
 
@@ -268,6 +292,8 @@ def run_set_default(
     profile_name: str,
     registry_path: Path,
     state_root: Path,
+    *,
+    dry_run: bool = False,
 ) -> WizardResult:
     """Run registry-only set-default operation.
 
@@ -275,6 +301,7 @@ def run_set_default(
         profile_name: Name of the profile to set as default.
         registry_path: Path to the registry file.
         state_root: Path to the state root.
+        dry_run: When set, validate and report the would-be change without writing.
 
     Returns:
         A ``WizardResult`` describing the outcome.
@@ -298,6 +325,13 @@ def run_set_default(
             profile_name=profile_name,
             message="Profile not found",
             error=f"Profile {profile_name!r} not found",
+        )
+
+    if dry_run:
+        return WizardResult(
+            success=True,
+            profile_name=profile_name,
+            message=f"Dry run: would set default to {profile_name!r}",
         )
 
     # Use transaction for mutation

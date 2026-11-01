@@ -1,32 +1,40 @@
 """Typer management CLI and raw dispatch integration.
 
-CLI routes management commands to typed handlers.
-Raw dispatch forwards all non-management args to native opencode.
-No author constants in installed src.
-No silent fallbacks.
-No network in CLI.
-No secret material in logs.
-No migration of legacy fields.
-All mutations go through transaction.
-Idempotent operations.
-No conversion calls in CLI.
+Routes management commands to typed handlers and forwards every non-management
+argv to native opencode byte-for-byte through the routing layer.
+
+Invariants:
+- No author constants in installed src.
+- No silent fallbacks.
+- No network in the CLI.
+- No secret material in logs.
+- No migration of legacy fields.
+- All mutations go through a transaction.
+- Idempotent operations.
+- No conversion calls in the CLI.
 """
 
 from __future__ import annotations
 
+import json
+import re
 import sys
-from typing import Annotated
+from pathlib import Path  # noqa: TC003
+from typing import Annotated, NoReturn, cast
 
 import typer
 
+from oc_selector import __version__
 from oc_selector.completion import generate_completion
-from oc_selector.diagnostics import collect_diagnostics
+from oc_selector.diagnostics import collect_diagnostics, probe_version
 from oc_selector.errors import OcSelectorError
+from oc_selector.host_sync import sync_host_package
 from oc_selector.init_flow import run_init, run_recovery_all
-from oc_selector.paths import resolve_config_parent, state_root
+from oc_selector.omo_upgrade import OmoSchema, run_omo_upgrade
+from oc_selector.paths import omo_config_path, registry_path, resolve_config_parent, state_root
 from oc_selector.process import launch_native, resolve_executable
-from oc_selector.registry import load_registry
-from oc_selector.routing import NativeRoute
+from oc_selector.registry import Registry, load_registry
+from oc_selector.routing import GRAMMAR_DOC, ManagementRoute, route
 from oc_selector.wizard import (
     CreateProfileInput,
     EditProfileInput,
@@ -41,38 +49,125 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 
+# Verified OpenCode 1.x release format; rejects dev/maintenance and 2.x.
+_RELEASE_RE = re.compile(r"^1\.\d+\.\d+$")
 
-def _error_exit(message: str, code: int = 1) -> None:
+
+def _error_exit(message: str, code: int = 1) -> NoReturn:
     typer.echo(f"Error: {message}", err=True)
     raise typer.Exit(code)
 
 
-@app.command()
-def init() -> None:
-    """Initialize oc-selector configuration."""
+def _is_1x_release(version: str) -> bool:
+    """Return True if ``version`` is a verified 1.x release string."""
+    return bool(_RELEASE_RE.match(version))
+
+
+def _require_registry() -> tuple[Path, Registry]:
+    """Load the registry or exit 2 with init guidance when it is absent."""
+    parent = resolve_config_parent()
+    reg_path = registry_path()
+    if not reg_path.exists():
+        _error_exit("No registry found. Run 'oc-selector init' first.", code=2)
+    return parent, load_registry(reg_path)
+
+
+def _run_recovery() -> None:
+    """Recover all pending journals and report each outcome."""
+    results = run_recovery_all()
+    if not results:
+        typer.echo("No pending recoveries.")
+        return
+    for entry in results:
+        if entry.recovered:
+            typer.echo(f"Recovered: {entry.journal_id}")
+        else:
+            typer.echo(f"Failed: {entry.journal_id} - {entry.error}", err=True)
+
+
+def _eligible_profiles(reg: Registry, profile: str | None, *, all_profiles: bool) -> list[str]:
+    """Return the OMO-eligible profile names, or exit 2 on an invalid selection."""
+    if all_profiles:
+        return [name for name, entry in reg.profiles.items() if entry.omo_profile is not None]
+    target_name = profile or reg.default_profile
+    if target_name not in reg.profiles:
+        _error_exit(f"Profile {target_name!r} not found", code=2)
+    if reg.profiles[target_name].omo_profile is None:
+        _error_exit(f"Profile {target_name!r} does not declare an OMO profile; nothing to upgrade", code=2)
+    return [target_name]
+
+
+def _read_omo_config(path: Path) -> dict[str, object]:
+    """Read and shape the OMO config JSON object, or exit 2 if it is invalid."""
     try:
-        result = run_init()
-        if result.created_parent:
-            typer.echo(f"Created config directory: {result.config_parent}")
-        if result.created_registry:
-            typer.echo(f"Created registry: {result.registry_path}")
-        if result.already_initialized:
-            typer.echo("Already initialized.")
+        raw = cast("object", json.loads(path.read_text()))
+    except json.JSONDecodeError as exc:
+        _error_exit(f"Invalid OMO config at {path}: {exc}", code=2)
+    if not isinstance(raw, dict):
+        _error_exit(f"Invalid OMO config at {path}: expected a JSON object.", code=2)
+    return cast("dict[str, object]", raw)
+
+
+def _resolve_target_version(reg: Registry, explicit: str | None) -> str:
+    """Return the target OMO version from ``explicit`` or the host executable."""
+    if explicit is not None:
+        return explicit
+    resolved, status = probe_version(reg.opencode_executable)
+    if status != "ok" or resolved is None:
+        _error_exit(f"Cannot resolve host version from {reg.opencode_executable!r} (status: {status}).", code=2)
+    if not _is_1x_release(resolved):
+        _error_exit(f"Unsupported host version for maintenance: {resolved!r}", code=2)
+    return resolved
+
+
+@app.command()
+def init(
+    *,
+    no_backup: Annotated[bool, typer.Option("--no-backup", help="Skip backups (inert for init)")] = False,
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="Preview without writing")] = False,
+    recover: Annotated[bool, typer.Option("--recover", help="Recover pending transactions")] = False,
+) -> None:
+    """Initialize oc-selector configuration."""
+    if recover and (no_backup or dry_run):
+        _error_exit("--recover cannot combine with --no-backup or --dry-run", code=2)
+    if recover:
+        _run_recovery()
+        return
+    try:
+        result = run_init(no_backup=no_backup, dry_run=dry_run)
     except OcSelectorError as exc:
-        _error_exit(str(exc))
+        _error_exit(str(exc), code=2)
+    verb = "Would create" if result.dry_run else "Created"
+    if result.created_parent:
+        typer.echo(f"{verb} config directory: {result.config_parent}")
+    if result.created_registry:
+        typer.echo(f"{verb} registry: {result.registry_path}")
+    if result.already_initialized and not result.dry_run:
+        typer.echo("Already initialized.")
+    if result.dry_run and not result.created_parent and not result.created_registry:
+        typer.echo("Nothing to create (already initialized).")
 
 
 @app.command()
 def create(
     name: Annotated[str, typer.Argument(help="Profile name")],
-    directory: Annotated[str, typer.Argument(help="Profile directory")],
+    directory: Annotated[str | None, typer.Argument(help="Profile directory")] = None,
+    *,
     model: Annotated[str | None, typer.Option("--model", "-m", help="Model ID")] = None,
+    no_interactive: Annotated[bool, typer.Option("--no-interactive", help="Do not prompt for the directory")] = False,
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="Preview without writing")] = False,
 ) -> None:
     """Create a new profile."""
-    parent = resolve_config_parent()
-    reg_path = parent / "config.toml"
+    _require_registry()
+    if directory is None:
+        if no_interactive or not sys.stdin.isatty():
+            _error_exit(f"Directory is required for profile {name!r}; pass it as an argument.", code=2)
+        raw = cast("str", typer.prompt(f"Directory for profile {name!r}"))
+        if not raw.strip():
+            _error_exit("Directory cannot be empty.", code=2)
+        directory = raw.strip()
     inp = CreateProfileInput(name=name, directory=directory, model=model)
-    result = run_create_wizard(inp, reg_path, state_root())
+    result = run_create_wizard(inp, registry_path(), state_root(), dry_run=dry_run)
     if result.success:
         typer.echo(result.message)
     else:
@@ -82,14 +177,15 @@ def create(
 @app.command()
 def edit(
     name: Annotated[str, typer.Argument(help="Profile name")],
+    *,
     directory: Annotated[str | None, typer.Option("--directory", "-d", help="New directory")] = None,
     model: Annotated[str | None, typer.Option("--model", "-m", help="New model ID")] = None,
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="Preview without writing")] = False,
 ) -> None:
     """Edit an existing profile."""
-    parent = resolve_config_parent()
-    reg_path = parent / "config.toml"
+    _require_registry()
     inp = EditProfileInput(name=name, directory=directory, model=model)
-    result = run_edit_wizard(inp, reg_path, state_root())
+    result = run_edit_wizard(inp, registry_path(), state_root(), dry_run=dry_run)
     if result.success:
         typer.echo(result.message)
     else:
@@ -99,11 +195,12 @@ def edit(
 @app.command("set-default")
 def set_default_cmd(
     name: Annotated[str, typer.Argument(help="Profile name to set as default")],
+    *,
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="Preview without writing")] = False,
 ) -> None:
     """Set the default profile (registry-only)."""
-    parent = resolve_config_parent()
-    reg_path = parent / "config.toml"
-    result = run_set_default(name, reg_path, state_root())
+    _require_registry()
+    result = run_set_default(name, registry_path(), state_root(), dry_run=dry_run)
     if result.success:
         typer.echo(result.message)
     else:
@@ -111,91 +208,152 @@ def set_default_cmd(
 
 
 @app.command("list")
-def list_profiles() -> None:
+def list_profiles(
+    *,
+    json_output: Annotated[bool, typer.Option("--json", help="Emit machine-readable JSON")] = False,
+) -> None:
     """List all registered profiles."""
-    parent = resolve_config_parent()
-    reg_path = parent / "config.toml"
-    if not reg_path.exists():
-        _error_exit("No registry found. Run 'oc-selector init' first.")
-    reg = load_registry(reg_path)
-    for name, entry in reg.profiles.items():
-        marker = "*" if name == reg.default_profile else " "
-        typer.echo(f"{marker} {name} -> {entry.directory}")
+    _, reg = _require_registry()
+    if json_output:
+        payload = {
+            "schema_version": 1,
+            "default_profile": reg.default_profile,
+            "profiles": [
+                {
+                    "name": profile_name,
+                    "directory": entry.directory,
+                    "omo_profile": entry.omo_profile,
+                }
+                for profile_name, entry in reg.profiles.items()
+            ],
+        }
+        typer.echo(json.dumps(payload))
+        return
+    for profile_name, entry in reg.profiles.items():
+        marker = "*" if profile_name == reg.default_profile else " "
+        suffix = f" ({entry.model})" if entry.model else ""
+        typer.echo(f"{marker} {profile_name} -> {entry.directory}{suffix}")
 
 
 @app.command()
-def diagnostics() -> None:
-    """Collect and display diagnostics."""
-    parent = resolve_config_parent()
-    reg_path = parent / "config.toml"
-    reg = None
-    if reg_path.exists():
-        reg = load_registry(reg_path)
+def info(
+    *,
+    json_output: Annotated[bool, typer.Option("--json", help="Emit machine-readable JSON")] = False,
+) -> None:
+    """Collect and display diagnostics for the current setup."""
+    reg_path = registry_path()
+    reg = load_registry(reg_path) if reg_path.exists() else None
     result = collect_diagnostics(reg)
+    if json_output:
+        typer.echo(json.dumps(result.to_dict()))
+        return
     typer.echo(f"OpenCode: {result.opencode.get('version', 'unknown')}")
     typer.echo(f"Default profile: {result.default_profile or 'none'}")
     typer.echo(f"Profiles: {len(result.profiles)}")
-    for p in result.profiles:
-        typer.echo(f"  {p.name}: {p.status}")
+    for profile in result.profiles:
+        typer.echo(f"  {profile.name}: {profile.status}")
+
+
+@app.command()
+def sync(
+    profile: Annotated[str | None, typer.Argument(help="Profile to sync")] = None,
+    *,
+    all_profiles: Annotated[bool, typer.Option("--all", help="Sync all profiles")] = False,
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="Preview without running the package manager")] = False,
+) -> None:
+    """Sync the host package for selected profiles."""
+    if profile is not None and all_profiles:
+        _error_exit("cannot specify both PROFILE and --all", code=2)
+    parent, reg = _require_registry()
+    if all_profiles:
+        targets = list(reg.profiles.items())
+    else:
+        target_name = profile or reg.default_profile
+        if target_name not in reg.profiles:
+            _error_exit(f"Profile {target_name!r} not found", code=2)
+        targets = [(target_name, reg.profiles[target_name])]
+    if not targets:
+        typer.echo("No profiles to sync.")
+        return
+    failed = False
+    for target_name, entry in targets:
+        result = sync_host_package(parent / entry.directory, state_root(), dry_run=dry_run)
+        if result.success:
+            typer.echo(f"{target_name}: {result.message}")
+        else:
+            failed = True
+            typer.echo(f"{target_name}: {result.message} ({result.error or 'error'})", err=True)
+    if failed:
+        raise typer.Exit(1)
+
+
+@app.command("upgrade-omo")
+def upgrade_omo_cmd(
+    profile: Annotated[str | None, typer.Argument(help="Profile to upgrade")] = None,
+    *,
+    version: Annotated[str | None, typer.Option("--version", help="Target OMO version")] = None,
+    all_profiles: Annotated[bool, typer.Option("--all", help="Upgrade all eligible profiles")] = False,
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="Preview without writing")] = False,
+) -> None:
+    """Upgrade the OMO config to a target version."""
+    if profile is not None and all_profiles:
+        _error_exit("cannot specify both PROFILE and --all", code=2)
+    _, reg = _require_registry()
+    eligible = _eligible_profiles(reg, profile, all_profiles=all_profiles)
+    if not eligible:
+        typer.echo("No eligible profiles (none declare an OMO profile).")
+        return
+    omo_path = omo_config_path()
+    if not omo_path.exists():
+        _error_exit(f"OMO config not found at {omo_path}.", code=2)
+    current = _read_omo_config(omo_path)
+    target_version = _resolve_target_version(reg, version)
+    schema = OmoSchema(version=target_version, required_fields=("version",))
+    new_config: dict[str, object] = {**current, "version": target_version}
+    result = run_omo_upgrade(omo_path, schema, state_root(), new_config=new_config, dry_run=dry_run)
+    if result.success:
+        typer.echo(result.message)
+    else:
+        _error_exit(result.error or result.message)
 
 
 @app.command()
 def completion(
     shell: Annotated[str, typer.Argument(help="Shell: bash, zsh, fish, powershell")],
+    alias: Annotated[str | None, typer.Option("--alias", help="Register under an alias name")] = None,
 ) -> None:
-    """Generate shell completion script."""
-    parent = resolve_config_parent()
-    reg_path = parent / "config.toml"
-    reg = None
-    if reg_path.exists():
-        reg = load_registry(reg_path)
-    script = generate_completion(shell, reg)
+    """Generate a shell completion script."""
+    reg_path = registry_path()
+    reg = load_registry(reg_path) if reg_path.exists() else None
+    script = generate_completion(shell, reg, alias=alias)
     typer.echo(script)
 
 
-@app.command()
-def recover() -> None:
-    """Recover from pending transactions."""
-    results = run_recovery_all()
-    if not results:
-        typer.echo("No pending recoveries.")
+@app.command("help")
+def help_cmd(
+    *,
+    version: Annotated[bool, typer.Option("--version", help="Print the wrapper version")] = False,
+) -> None:
+    """Show wrapper usage and the management grammar."""
+    if version:
+        typer.echo(__version__)
         return
-    for r in results:
-        if r.recovered:
-            typer.echo(f"Recovered: {r.journal_id}")
-        else:
-            typer.echo(f"Failed: {r.journal_id} - {r.error}", err=True)
+    typer.echo(GRAMMAR_DOC)
 
 
 def main() -> None:
-    """Route management commands or forward raw dispatch to native."""
+    """Route management commands to handlers or forward raw args to native."""
     args = sys.argv[1:]
-
-    # Check for management commands
-    management_cmds = {
-        "init",
-        "create",
-        "edit",
-        "set-default",
-        "list",
-        "diagnostics",
-        "completion",
-        "recover",
-    }
-    if args and args[0] in management_cmds:
-        app(args=args, prog_name="oc-selector")
-        return
-
-    # Raw dispatch: forward all args to native opencode
     try:
-        parent = resolve_config_parent()
-        reg_path = parent / "config.toml"
-        if not reg_path.exists():
+        reg_path = registry_path()
+        reg = load_registry(reg_path) if reg_path.exists() else None
+        decision = route(args, reg)
+        if isinstance(decision, ManagementRoute):
+            app(args=[decision.command, *decision.args], prog_name="oc-selector")
+            return
+        if reg is None:
             _error_exit("No registry found. Run 'oc-selector init' first.", code=2)
-
-        reg = load_registry(reg_path)
-        resolve_executable(reg.opencode_executable)  # pre-validate (127 missing / 126 non-executable)
-        decision = NativeRoute(argv=tuple(args), profile_name=reg.default_profile)
+        resolve_executable(reg.opencode_executable)
         launch_native(decision, reg)
     except OcSelectorError as exc:
         _error_exit(str(exc), code=2)

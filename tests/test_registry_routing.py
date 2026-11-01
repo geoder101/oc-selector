@@ -196,6 +196,17 @@ class TestRegistryRoundtrip:
             assert reg2.profiles[name].directory == reg.profiles[name].directory
             assert reg2.profiles[name].omo_profile == reg.profiles[name].omo_profile
 
+    def test_happy_roundtrip_model(self) -> None:
+        reg = Registry(
+            schema_version=1,
+            default_profile="default",
+            opencode_executable="opencode",
+            profiles={"default": ProfileEntry(directory="opencode", model="openai/gpt-4")},
+        )
+        output = registry_to_toml(reg)
+        reg2 = parse_registry(output)
+        assert reg2.profiles["default"].model == "openai/gpt-4"
+
 
 # --- Routing tests ---
 
@@ -352,3 +363,33 @@ class TestManagementGrammar:
     def test_failure_version_requires_value(self) -> None:
         with pytest.raises(ArgumentError, match="requires a value"):
             validate_management_args("upgrade-omo", ("--version",))
+
+    def test_happy_create_dir_and_model(self) -> None:
+        validate_management_args("create", ("myprofile", "mydir", "--model", "openai/gpt"))
+
+    def test_happy_edit_directory_and_model(self) -> None:
+        validate_management_args(
+            "edit", ("gpt", "--directory", "newdir", "--model", "anthropic/claude"),
+        )
+
+    def test_happy_sync_dry_run(self) -> None:
+        validate_management_args("sync", ("--dry-run",))
+
+    def test_happy_upgrade_omo_dry_run(self) -> None:
+        validate_management_args("upgrade-omo", ("gpt", "--dry-run"))
+
+    def test_failure_model_requires_value(self) -> None:
+        with pytest.raises(ArgumentError, match="requires a value"):
+            validate_management_args("create", ("myprofile", "--model"))
+
+    def test_failure_directory_requires_value(self) -> None:
+        with pytest.raises(ArgumentError, match="requires a value"):
+            validate_management_args("edit", ("gpt", "--directory"))
+
+    def test_failure_alias_requires_value(self) -> None:
+        with pytest.raises(ArgumentError, match="requires a value"):
+            validate_management_args("completion", ("bash", "--alias"))
+
+    def test_failure_create_too_many_positionals(self) -> None:
+        with pytest.raises(ArgumentError, match="Too many"):
+            validate_management_args("create", ("a", "b", "c"))
