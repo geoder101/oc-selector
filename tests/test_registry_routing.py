@@ -369,7 +369,8 @@ class TestManagementGrammar:
 
     def test_happy_edit_directory_and_model(self) -> None:
         validate_management_args(
-            "edit", ("gpt", "--directory", "newdir", "--model", "anthropic/claude"),
+            "edit",
+            ("gpt", "--directory", "newdir", "--model", "anthropic/claude"),
         )
 
     def test_happy_sync_dry_run(self) -> None:

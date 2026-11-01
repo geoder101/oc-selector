@@ -91,9 +91,9 @@ def convert_legacy_to_native(  # noqa: C901, PLR0912
                 cast("list[object]", agent_entry.setdefault("models", [])).append(fallbacks)
         # Permission goes under harness key
         if "permission" in agent_fields:
-            cast("dict[str, object]", harness_agents.setdefault(agent_name, {}))["permission"] = (
-                agent_fields["permission"]
-            )
+            cast("dict[str, object]", harness_agents.setdefault(agent_name, {}))["permission"] = agent_fields[
+                "permission"
+            ]
         # Unknown fields
         known = {"model", "fallback_models", "permission"}
         for k in agent_fields:
