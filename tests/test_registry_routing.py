@@ -1,6 +1,6 @@
 """TDD tests for typed registry, portable paths, and routing decisions.
 
-Covers C1/C2 contracts:
+Covers:
 - Registry parse/validate/serialize
 - Profile name validation (reserved, casefold, device names)
 - Path resolution (XDG, home, state root)

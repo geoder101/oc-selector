@@ -1,6 +1,6 @@
 """Recoverable transactions with private backups and cross-platform locks.
 
-C4 contract:
+Contract:
 - One portalocker exclusive lock at state root protects every mutation AND launch admission.
 - Bounded 5-second acquisition.
 - Journal state machine: prepared -> applying -> committed -> cleanup-complete.
@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import cast
 
 import portalocker
 
@@ -86,17 +86,27 @@ class Transaction:
         tx.rollback()
     """
 
+    _state_root: Path
+    _operation: str
+    _id: str
+    _phase: JournalPhase
+    _resources: list[ResourceEntry]
+    _staging_dir: Path
+    _journal_path: Path
+    _lock_path: Path
+    _lock_fd: int | None
+
     def __init__(self, state_root: Path, operation: str) -> None:
         """Initialize a new transaction with a unique ID."""
         self._state_root = state_root
         self._operation = operation
         self._id = str(uuid.uuid4())
         self._phase = JournalPhase.PREPARED
-        self._resources: list[ResourceEntry] = []
+        self._resources = []
         self._staging_dir = state_root / "staging" / self._id
         self._journal_path = state_root / "journals" / f"{self._id}.json"
         self._lock_path = state_root / "maintenance.lock"
-        self._lock_fd: int | None = None
+        self._lock_fd = None
 
     @property
     def id(self) -> str:
@@ -248,7 +258,7 @@ def _fsync_dir(path: Path) -> None:
         pass
 
 
-def journal_to_dict(j: Journal) -> dict[str, Any]:
+def journal_to_dict(j: Journal) -> dict[str, object]:
     """Serialize a Journal to a JSON-safe dict."""
     return {
         "id": j.id,
@@ -276,25 +286,25 @@ def read_journal(path: Path) -> Journal | None:
     if not path.exists():
         return None
     try:
-        data = json.loads(path.read_text())
+        data = cast("dict[str, object]", json.loads(path.read_text()))
         return Journal(
-            id=data["id"],
-            operation=data["operation"],
-            phase=JournalPhase(data["phase"]),
+            id=cast("str", data["id"]),
+            operation=cast("str", data["operation"]),
+            phase=JournalPhase(cast("str", data["phase"])),
             resources=[
                 ResourceEntry(
-                    path=r["path"],
-                    preimage_hash=r.get("preimage_hash"),
-                    postimage_hash=r.get("postimage_hash"),
-                    existed=r.get("existed", False),
-                    mode=r.get("mode"),
+                    path=cast("str", r["path"]),
+                    preimage_hash=cast("str | None", r.get("preimage_hash")),
+                    postimage_hash=cast("str | None", r.get("postimage_hash")),
+                    existed=cast("bool", r.get("existed", False)),
+                    mode=cast("int | None", r.get("mode")),
                 )
-                for r in data.get("resources", [])
+                for r in cast("list[dict[str, object]]", data.get("resources", []))
             ],
-            affected_profiles=data.get("affected_profiles", []),
-            pid=data.get("pid", 0),
-            host=data.get("host", ""),
-            timestamp=data.get("timestamp", ""),
+            affected_profiles=cast("list[str]", data.get("affected_profiles", [])),
+            pid=cast("int", data.get("pid", 0)),
+            host=cast("str", data.get("host", "")),
+            timestamp=cast("str", data.get("timestamp", "")),
         )
     except (json.JSONDecodeError, KeyError, ValueError):
         return None

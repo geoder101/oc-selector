@@ -1,15 +1,15 @@
 """Guided create/edit wizard and registry-only set-default.
 
-C1: Guided create is interactive, validates all inputs.
-C2: Guided edit preserves existing fields, only modifies specified ones.
-C3: No author constants in installed src.
-C4: No silent fallbacks.
-C5: No network in wizard.
-C6: No secret material in logs.
-C7: No migration of legacy fields.
-C8: Set-default is registry-only, no file mutations.
-C9: All mutations go through transaction.
-C10: No conversion calls in wizard.
+Guided create is interactive, validates all inputs.
+Guided edit preserves existing fields, only modifies specified ones.
+No author constants in installed src.
+No silent fallbacks.
+No network in wizard.
+No secret material in logs.
+No migration of legacy fields.
+Set-default is registry-only, no file mutations.
+All mutations go through transaction.
+No conversion calls in wizard.
 """
 
 from __future__ import annotations
@@ -76,7 +76,7 @@ def validate_create_input(inp: CreateProfileInput) -> None:
         validate_model_id(inp.model)
 
 
-def validate_edit_input(inp: EditProfileInput, existing: ProfileEntry) -> None:  # noqa: ARG001
+def validate_edit_input(inp: EditProfileInput, existing: ProfileEntry) -> None:  # noqa: ARG001  # pyright: ignore[reportUnusedParameter]
     """Validate edit profile input.
 
     Raises:

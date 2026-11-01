@@ -1,17 +1,17 @@
 """Comment-preserving JSONC adapter using json-five ModelLoader/ModelDumper.
 
-C3 contract:
+Contract:
 - JSONC uses json-five ModelLoader/ModelDumper through one adapter.
 - Roundtrip unchanged documents byte-identically.
 - Edited documents preserve unrelated comments, indentation, ordering and values.
 - Reject duplicate relevant keys, malformed JSONC, unsupported model nodes.
 - Plain JSON is a valid subset, not a second runtime parser.
-- The adapter transforms bytes; file I/O is handled by transactions (task 5).
+- The adapter transforms bytes; file I/O is handled by transactions.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import cast
 
 from json5 import dumper, loader
 from json5.model import (
@@ -33,7 +33,7 @@ class JsoncAdapter:
         """
         try:
             ml = loader.ModelLoader()
-            return loader.loads(text, loader=ml)  # type: ignore[return-value]
+            return cast("JSONText", loader.loads(text, loader=ml))
         except Exception as e:
             raise SchemaValidationError(f"JSONC parse failed: {e}") from e
 
@@ -66,9 +66,9 @@ class JsoncAdapter:
             current = self._get_key(current, key)
         if not hasattr(current, "raw_value"):
             raise SchemaValidationError("Target node does not support raw_value edit")
-        current.raw_value = new_value  # pyright: ignore[reportAttributeAccessIssue,reportAssignmentType]
+        current.raw_value = new_value  # pyright: ignore[reportAttributeAccessIssue]
         if hasattr(current, "value"):
-            current.value = new_value.strip('"')  # pyright: ignore[reportAttributeAccessIssue,reportAssignmentType]
+            current.value = new_value.strip('"')  # pyright: ignore[reportAttributeAccessIssue]
 
     def _get_key(self, node: Node, key: str) -> Node:
         """Get a child node by key from a JSONObject or JSONText."""
@@ -76,7 +76,7 @@ class JsoncAdapter:
         if not isinstance(obj, JSONObject):
             raise SchemaValidationError(f"Expected object at key {key!r}, got {type(obj).__name__}")
         for i, k in enumerate(obj.keys):
-            if k.characters == key:  # pyright: ignore[reportAttributeAccessIssue]
+            if k.characters == key:  # pyright: ignore[reportAttributeAccessIssue,reportUnknownMemberType]
                 return obj.values[i]
         raise SchemaValidationError(f"Key {key!r} not found")
 
@@ -88,7 +88,7 @@ class JsoncAdapter:
             return False
         return True
 
-    def to_plain(self, model: JSONText) -> dict[str, Any]:
+    def to_plain(self, model: JSONText) -> dict[str, object]:
         """Convert model to plain Python dict (loses comments)."""
         ml = loader.DefaultLoader()
-        return loader.loads(self.dump(model), loader=ml)  # type: ignore[return-value]
+        return cast("dict[str, object]", loader.loads(self.dump(model), loader=ml))

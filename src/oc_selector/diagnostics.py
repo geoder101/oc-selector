@@ -1,6 +1,6 @@
 """Read-only diagnostics collector for oc-selector.
 
-C6 contract:
+Contract:
 - ``info --json`` stable object with schema_version 1.
 - Collect only allowlisted paths/versions/status/metadata.
 - Never carry raw config, provider URLs, secret values or secret-reference paths.
@@ -19,7 +19,7 @@ import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from oc_selector import __version__
 from oc_selector.paths import omo_config_path, registry_path, resolve_config_parent, state_root
@@ -49,11 +49,11 @@ class DiagnosticsResult:
     default_profile: str | None
     opencode: dict[str, str | None]
     profiles: list[ProfileDiagnostics]
-    recovery: dict[str, Any]
-    lock: dict[str, Any]
+    recovery: dict[str, object]
+    lock: dict[str, object]
     warnings: list[dict[str, str]]
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, object]:
         """Serialize to a JSON-safe dict."""
         return {
             "schema_version": self.schema_version,
@@ -164,7 +164,7 @@ def collect_diagnostics(
     # Lock status (read-only, no acquisition)
     lock_path = st_root / "maintenance.lock"
     lock_status = "absent"
-    lock_info: dict[str, Any] = {"status": lock_status, "pid": None, "host": None, "started_at": None}
+    lock_info: dict[str, object] = {"status": lock_status, "pid": None, "host": None, "started_at": None}
     if lock_path.exists():
         lock_status = "present"
         lock_info = {"status": lock_status, "pid": None, "host": None, "started_at": None}
@@ -172,7 +172,7 @@ def collect_diagnostics(
     # Recovery status (read-only journal check)
     recovery_dir = st_root / "journals"
     recovery_status = "clean"
-    transactions: list[dict[str, Any]] = []
+    transactions: list[dict[str, object]] = []
     if recovery_dir.exists():
         journals = list(recovery_dir.iterdir())
         if journals:

@@ -1,6 +1,6 @@
 """TDD tests for read-only diagnostics collector.
 
-Covers C6 contract:
+Covers:
 - Schema version exactly 1
 - Version probe with 2s timeout
 - Only [binary, '--version'] subprocess

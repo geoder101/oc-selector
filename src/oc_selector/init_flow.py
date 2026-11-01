@@ -1,19 +1,20 @@
 """Generic init and recovery flows.
 
-C1: Generic init detects existing config, creates missing parent, creates
+Generic init detects existing config, creates missing parent, creates
 empty registry, never calls conversion.
-C2: Recovery finds pending journals, lists them, restores from backup.
-C5: Source-only personal setup is separate from generic init.
-C6: No author constants in installed src.
-C7: No silent fallbacks.
-C8: No secret material in logs.
-C9: No network in init/recovery.
-C10: No migration of legacy fields.
+Recovery finds pending journals, lists them, restores from backup.
+Source-only personal setup is separate from generic init.
+No author constants in installed src.
+No silent fallbacks.
+No secret material in logs.
+No network in init/recovery.
+No migration of legacy fields.
 """
 
 from __future__ import annotations
 
 import contextlib
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -154,7 +155,7 @@ def list_pending_recoveries(
 
 def run_recovery(
     journal_path: Path,
-    state_dir: Path | None = None,  # noqa: ARG001
+    state_dir: Path | None = None,  # noqa: ARG001  # pyright: ignore[reportUnusedParameter]
 ) -> RecoveryResult:
     """Recover from a pending journal by restoring preimage files.
 
@@ -183,7 +184,7 @@ def run_recovery(
             backup = journal_path.parent / f"{resource.path}.bak"
             if backup.exists():
                 try:
-                    backup.copy2(res_path)
+                    shutil.copy2(backup, res_path)
                 except OSError as exc:
                     raise TransactionError(
                         f"Cannot restore {res_path}: {exc}",

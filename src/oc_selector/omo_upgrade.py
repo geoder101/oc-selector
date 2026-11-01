@@ -1,15 +1,15 @@
 """Schema-validated exact OMO upgrade.
 
-C1: OMO upgrade is schema-validated before any mutation.
-C2: No drift - exact version pinning.
-C3: No author constants in installed src.
-C4: No silent fallbacks.
-C5: No network in validation (only local file operations).
-C6: No secret material in logs.
-C7: No migration of legacy fields.
-C8: All mutations go through transaction.
-C9: Idempotent operations.
-C10: No conversion calls.
+OMO upgrade is schema-validated before any mutation.
+No drift - exact version pinning.
+No author constants in installed src.
+No silent fallbacks.
+No network in validation (only local file operations).
+No secret material in logs.
+No migration of legacy fields.
+All mutations go through transaction.
+Idempotent operations.
+No conversion calls.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path  # noqa: TC003
+from typing import cast
 
 from oc_selector.errors import (
     MaintenanceError,
@@ -66,12 +67,13 @@ def validate_omo_config(
         raise SchemaValidationError(f"Config not found: {config_path}")
 
     try:
-        data = json.loads(config_path.read_text())
+        raw = cast("object", json.loads(config_path.read_text()))
     except json.JSONDecodeError as exc:
         raise SchemaValidationError(f"Invalid JSON: {exc}") from exc
 
-    if not isinstance(data, dict):
+    if not isinstance(raw, dict):
         raise SchemaValidationError("Config must be a JSON object")
+    data = cast("dict[str, object]", raw)
 
     # Check required fields
     for field in schema.required_fields:
@@ -110,7 +112,7 @@ def run_omo_upgrade(
     current_version = "unknown"
     if config_path.exists():
         try:
-            current_data = json.loads(config_path.read_text())
+            current_data = cast("dict[str, object]", json.loads(config_path.read_text()))
             current_version = str(current_data.get("version", "unknown"))
         except (json.JSONDecodeError, OSError):
             current_version = "unknown"

@@ -1,6 +1,6 @@
 """Non-mutating four-shell completion script generation.
 
-C1/C2 contract:
+Contract:
 - Support bash/zsh/fish/powershell (PowerShell >=7.3).
 - Use Typer public APIs for management completion.
 - Typed raw-boundary adapter for first-token profiles/management.

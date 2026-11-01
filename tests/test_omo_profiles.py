@@ -1,6 +1,6 @@
 """TDD tests for parameterized legacy conversion and modern native projections.
 
-Covers C3/C10 contracts:
+Covers:
 - Legacy field conversion (agents, categories, disabled_hooks, permission)
 - Harness key is literal "[opencode]"
 - Model chain normalization into singleton arrays
@@ -11,6 +11,8 @@ Covers C3/C10 contracts:
 """
 
 from __future__ import annotations
+
+from typing import cast
 
 import pytest
 
@@ -31,21 +33,24 @@ class TestLegacyConversion:
         )
         result = convert_legacy_to_native("oc-selector-test", inp)
         assert "agents" in result.profiles_entry
-        assert result.profiles_entry["agents"]["build"]["models"] == ["test/provider/model-a"]
+        agents = cast("dict[str, dict[str, list[str]]]", result.profiles_entry["agents"])
+        assert agents["build"]["models"] == ["test/provider/model-a"]
 
     def test_happy_agent_with_fallbacks(self) -> None:
         inp = ConversionInput(
             agents={"build": {"model": "p/m1", "fallback_models": ["p/m2", "p/m3"]}},
         )
         result = convert_legacy_to_native("oc-selector-test", inp)
-        assert result.profiles_entry["agents"]["build"]["models"] == ["p/m1", "p/m2", "p/m3"]
+        agents = cast("dict[str, dict[str, list[str]]]", result.profiles_entry["agents"])
+        assert agents["build"]["models"] == ["p/m1", "p/m2", "p/m3"]
 
     def test_happy_category_model(self) -> None:
         inp = ConversionInput(
             categories={"quick": {"model": "test/provider/quick"}},
         )
         result = convert_legacy_to_native("oc-selector-test", inp)
-        assert result.profiles_entry["categories"]["quick"]["models"] == ["test/provider/quick"]
+        categories = cast("dict[str, dict[str, list[str]]]", result.profiles_entry["categories"])
+        assert categories["quick"]["models"] == ["test/provider/quick"]
 
     def test_happy_disabled_hooks(self) -> None:
         inp = ConversionInput(disabled_hooks=["hook1", "hook2"])
@@ -58,7 +63,8 @@ class TestLegacyConversion:
         )
         result = convert_legacy_to_native("oc-selector-test", inp)
         assert HARNESS_KEY == "[opencode]"
-        assert result.harness_entry["agents"]["explore"]["permission"] == "allow"
+        harness_agents = cast("dict[str, dict[str, str]]", result.harness_entry["agents"])
+        assert harness_agents["explore"]["permission"] == "allow"
 
     def test_happy_multiple_agents(self) -> None:
         inp = ConversionInput(
@@ -69,7 +75,7 @@ class TestLegacyConversion:
             },
         )
         result = convert_legacy_to_native("oc-selector-test", inp)
-        assert len(result.profiles_entry["agents"]) == 3
+        assert len(cast("dict[str, object]", result.profiles_entry["agents"])) == 3
 
     def test_failure_unknown_agent_field(self) -> None:
         inp = ConversionInput(
@@ -96,14 +102,16 @@ class TestModernProjection:
             "oc-selector-test",
             agents={"build": ["p/m1", "p/m2"]},
         )
-        assert entry["agents"]["build"]["models"] == ["p/m1", "p/m2"]
+        agents = cast("dict[str, dict[str, list[str]]]", entry["agents"])
+        assert agents["build"]["models"] == ["p/m1", "p/m2"]
 
     def test_happy_build_entry_with_categories(self) -> None:
         entry = build_native_entry(
             "oc-selector-test",
             categories={"quick": ["p/q"]},
         )
-        assert entry["categories"]["quick"]["models"] == ["p/q"]
+        categories = cast("dict[str, dict[str, list[str]]]", entry["categories"])
+        assert categories["quick"]["models"] == ["p/q"]
 
     def test_happy_empty_entry(self) -> None:
         entry = build_native_entry("oc-selector-test")

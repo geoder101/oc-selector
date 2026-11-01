@@ -1,6 +1,6 @@
 """TDD tests for schema-validated exact OMO upgrade.
 
-Covers C1/C2/C8/C9 contracts:
+Covers:
 - Validate config against schema
 - Reject version mismatch
 - Reject missing required fields
@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path  # noqa: TC003
+from typing import cast
 
 import pytest
 
@@ -87,11 +88,11 @@ class TestRunOmoUpgrade:
     ) -> None:
         state_root = tmp_path / "state"
         state_root.mkdir()
-        new_config = {"version": "1.0.0", "name": "updated-omo"}
+        new_config: dict[str, object] = {"version": "1.0.0", "name": "updated-omo"}
         result = run_omo_upgrade(valid_config, schema, state_root, new_config)
         assert result.success is True
         # Verify file was updated
-        data = json.loads(valid_config.read_text())
+        data = cast("dict[str, object]", json.loads(valid_config.read_text()))
         assert data["name"] == "updated-omo"
 
     def test_failure_invalid_new_config(
@@ -102,7 +103,7 @@ class TestRunOmoUpgrade:
     ) -> None:
         state_root = tmp_path / "state"
         state_root.mkdir()
-        bad_config = {"version": "2.0.0", "name": "test"}
+        bad_config: dict[str, object] = {"version": "2.0.0", "name": "test"}
         result = run_omo_upgrade(valid_config, schema, state_root, bad_config)
         assert result.success is False
         assert "validation failed" in result.message

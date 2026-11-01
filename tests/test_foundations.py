@@ -1,6 +1,6 @@
 """Foundational TDD tests for packaging, isolation, typed errors and subprocess.
 
-These tests establish the task-1 contract: a clean package with a single console
+These tests establish the foundational contract: a clean package with a single console
 script, no import side effects, a typed error hierarchy with public exit codes,
 strict isolation from the real home, and a working isolated subprocess harness.
 """
@@ -95,7 +95,7 @@ class TestTypedErrors:
             assert str(err) == "msg"
 
     def test_failure_wrong_exit_code_detected(self) -> None:
-        """Any deviation from the C1 exit-code contract is detected."""
+        """Any deviation from the exit-code contract is detected."""
         contract = {
             errors.ArgumentError: 2,
             errors.RegistryError: 2,

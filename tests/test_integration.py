@@ -103,7 +103,7 @@ class TestFullUserWorkflow:
 
     def test_happy_completion_all_shells(
         self,
-        isolated_env: Path,  # noqa: ARG002
+        isolated_env: Path,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
     ) -> None:
         """Completion works for all four shells after init."""
         runner.invoke(app, ["init"])
@@ -115,7 +115,7 @@ class TestFullUserWorkflow:
 
     def test_happy_diagnostics_after_init(
         self,
-        isolated_env: Path,  # noqa: ARG002
+        isolated_env: Path,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
     ) -> None:
         """Diagnostics runs successfully after init."""
         runner.invoke(app, ["init"])
@@ -124,7 +124,7 @@ class TestFullUserWorkflow:
 
     def test_happy_recover_no_pending(
         self,
-        isolated_env: Path,  # noqa: ARG002
+        isolated_env: Path,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
     ) -> None:
         """Recover with no pending journals is a no-op."""
         runner.invoke(app, ["init"])
@@ -138,7 +138,7 @@ class TestErrorPaths:
 
     def test_failure_create_duplicate(
         self,
-        isolated_env: Path,  # noqa: ARG002
+        isolated_env: Path,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
     ) -> None:
         runner.invoke(app, ["init"])
         runner.invoke(app, ["create", "test", "dir"])
@@ -148,7 +148,7 @@ class TestErrorPaths:
 
     def test_failure_edit_nonexistent(
         self,
-        isolated_env: Path,  # noqa: ARG002
+        isolated_env: Path,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
     ) -> None:
         runner.invoke(app, ["init"])
         r = runner.invoke(app, ["edit", "ghost", "--directory", "dir"])
@@ -157,7 +157,7 @@ class TestErrorPaths:
 
     def test_failure_setdefault_nonexistent(
         self,
-        isolated_env: Path,  # noqa: ARG002
+        isolated_env: Path,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
     ) -> None:
         runner.invoke(app, ["init"])
         r = runner.invoke(app, ["set-default", "ghost"])
@@ -181,7 +181,7 @@ class TestIdempotency:
 
     def test_happy_init_idempotent(
         self,
-        isolated_env: Path,  # noqa: ARG002
+        isolated_env: Path,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
     ) -> None:
         r1 = runner.invoke(app, ["init"])
         r2 = runner.invoke(app, ["init"])
@@ -191,7 +191,7 @@ class TestIdempotency:
 
     def test_happy_setdefault_idempotent(
         self,
-        isolated_env: Path,  # noqa: ARG002
+        isolated_env: Path,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
     ) -> None:
         runner.invoke(app, ["init"])
         r1 = runner.invoke(app, ["set-default", "default"])

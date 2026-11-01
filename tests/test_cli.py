@@ -1,6 +1,6 @@
 """TDD tests for Typer management CLI and raw dispatch.
 
-Covers C1/C2/C4 contracts:
+Covers:
 - CLI routes management commands
 - Raw dispatch forwards args to native
 - Error handling with proper exit codes
@@ -49,7 +49,7 @@ class TestInitCommand:
 
 
 class TestListCommand:
-    def test_happy_list(self, setup_registry: Path) -> None:  # noqa: ARG002
+    def test_happy_list(self, setup_registry: Path) -> None:  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
         result = runner.invoke(app, ["list"])
         assert result.exit_code == 0
         assert "default" in result.output
@@ -64,52 +64,52 @@ class TestListCommand:
 
 
 class TestCreateCommand:
-    def test_happy_create(self, setup_registry: Path) -> None:  # noqa: ARG002
+    def test_happy_create(self, setup_registry: Path) -> None:  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
         result = runner.invoke(app, ["create", "test-profile", "test-dir"])
         assert result.exit_code == 0
         assert "Created" in result.output
 
-    def test_failure_duplicate(self, setup_registry: Path) -> None:  # noqa: ARG002
+    def test_failure_duplicate(self, setup_registry: Path) -> None:  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
         result = runner.invoke(app, ["create", "default", "other-dir"])
         assert result.exit_code == 1
         assert "already exists" in result.output
 
 
 class TestSetDefaultCommand:
-    def test_happy_set_default(self, setup_registry: Path) -> None:  # noqa: ARG002
+    def test_happy_set_default(self, setup_registry: Path) -> None:  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
         # Create a second profile first
         runner.invoke(app, ["create", "second", "second-dir"])
         result = runner.invoke(app, ["set-default", "second"])
         assert result.exit_code == 0
         assert "Set default" in result.output
 
-    def test_failure_not_found(self, setup_registry: Path) -> None:  # noqa: ARG002
+    def test_failure_not_found(self, setup_registry: Path) -> None:  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
         result = runner.invoke(app, ["set-default", "nonexistent"])
         assert result.exit_code == 1
         assert "not found" in result.output
 
 
 class TestCompletionCommand:
-    def test_happy_bash(self, setup_registry: Path) -> None:  # noqa: ARG002
+    def test_happy_bash(self, setup_registry: Path) -> None:  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
         result = runner.invoke(app, ["completion", "bash"])
         assert result.exit_code == 0
         assert "oc-selector" in result.output
 
-    def test_happy_zsh(self, setup_registry: Path) -> None:  # noqa: ARG002
+    def test_happy_zsh(self, setup_registry: Path) -> None:  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
         result = runner.invoke(app, ["completion", "zsh"])
         assert result.exit_code == 0
 
-    def test_happy_fish(self, setup_registry: Path) -> None:  # noqa: ARG002
+    def test_happy_fish(self, setup_registry: Path) -> None:  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
         result = runner.invoke(app, ["completion", "fish"])
         assert result.exit_code == 0
 
-    def test_happy_powershell(self, setup_registry: Path) -> None:  # noqa: ARG002
+    def test_happy_powershell(self, setup_registry: Path) -> None:  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
         result = runner.invoke(app, ["completion", "powershell"])
         assert result.exit_code == 0
 
 
 class TestRecoverCommand:
-    def test_happy_no_pending(self, setup_registry: Path) -> None:  # noqa: ARG002
+    def test_happy_no_pending(self, setup_registry: Path) -> None:  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
         result = runner.invoke(app, ["recover"])
         assert result.exit_code == 0
         assert "No pending" in result.output

@@ -1,6 +1,6 @@
 """Routing decisions for oc-selector.
 
-C1 contract:
+Contract:
 - Alias or canonical invocation has identical grammar.
 - With no args, choose registry default.
 - Inspect only first token before management parsing.
@@ -45,7 +45,7 @@ class ManagementRoute:
 def route(argv: list[str], registry: Registry | None) -> NativeRoute | ManagementRoute:
     """Route an argv (excluding program name) to a Native or Management route.
 
-    Rules (C1):
+    Rules:
     - Empty argv → NativeRoute with default profile, empty tail.
     - First token is ``--`` → remove it, force default/native forwarding of rest.
     - First token is a registered management name → ManagementRoute.
@@ -84,7 +84,7 @@ def route(argv: list[str], registry: Registry | None) -> NativeRoute | Managemen
     return NativeRoute(argv=tuple(argv), profile_name=default)
 
 
-# --- Management grammar validation (C1 exact grammar) ---
+# --- Management grammar validation (exact grammar) ---
 
 _GRAMMAR_DOC = """\
 list [--json]
@@ -121,7 +121,7 @@ _GRAMMAR: dict[str, _CmdSpec] = {
 
 
 def validate_management_args(command: str, args: tuple[str, ...]) -> None:  # noqa: C901, PLR0912
-    """Validate management command arguments against C1 exact grammar.
+    """Validate management command arguments against the exact grammar.
 
     Raises ``ArgumentError`` (exit 2) on violation.
     """

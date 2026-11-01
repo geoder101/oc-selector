@@ -1,6 +1,6 @@
 """TDD tests for comment-preserving JSONC adapter.
 
-Covers C3 adapter contract:
+Covers:
 - Roundtrip byte-identity
 - Comment preservation on edit
 - Trailing commas, Unicode, BOM
@@ -53,8 +53,8 @@ class TestCommentPreservation:
         text = (FIXTURES / "basic.jsonc").read_text()
         model = adapter.load(text)
         model_node = adapter.get_value(model, "agents", "build", "model")
-        model_node.raw_value = '"new/model"'  # pyright: ignore[reportAttributeAccessIssue,reportAssignmentType]
-        model_node.value = "new/model"  # pyright: ignore[reportAttributeAccessIssue,reportAssignmentType]
+        model_node.raw_value = '"new/model"'  # pyright: ignore[reportAttributeAccessIssue]
+        model_node.value = "new/model"  # pyright: ignore[reportAttributeAccessIssue]
         output = adapter.dump(model)
         assert "// Main config" in output
         assert "/* Block comment for categories */" in output
@@ -65,8 +65,8 @@ class TestCommentPreservation:
         model = adapter.load(text)
         # Edit one value
         model_node = adapter.get_value(model, "agents", "explore", "model")
-        model_node.raw_value = '"changed/model"'  # pyright: ignore[reportAttributeAccessIssue,reportAssignmentType]
-        model_node.value = "changed/model"  # pyright: ignore[reportAttributeAccessIssue,reportAssignmentType]
+        model_node.raw_value = '"changed/model"'  # pyright: ignore[reportAttributeAccessIssue]
+        model_node.value = "changed/model"  # pyright: ignore[reportAttributeAccessIssue]
         output = adapter.dump(model)
         # Other values unchanged
         assert '"test/provider/build-model"' in output
@@ -95,7 +95,7 @@ class TestKeyNavigation:
         text = (FIXTURES / "basic.jsonc").read_text()
         model = adapter.load(text)
         node = adapter.get_value(model, "agents", "build", "model")
-        assert node.raw_value == '"test/provider/build-model"'  # pyright: ignore[reportAttributeAccessIssue]
+        assert node.raw_value == '"test/provider/build-model"'  # pyright: ignore[reportAttributeAccessIssue,reportUnknownMemberType]
 
     def test_happy_has_key(self, adapter: JsoncAdapter) -> None:
         text = (FIXTURES / "basic.jsonc").read_text()

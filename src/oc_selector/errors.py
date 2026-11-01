@@ -1,7 +1,7 @@
 """Typed error hierarchy for oc-selector with public exit classifications.
 
 Every error carries a machine-readable ``code`` for programmatic identification,
-a public ``exit_code`` matching the C1 status contract, and a human-facing
+a public ``exit_code`` matching the status contract, and a human-facing
 ``message``. Exit codes:
 
 - ``2``   argument / registry / boundary parse errors

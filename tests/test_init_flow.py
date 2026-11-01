@@ -1,6 +1,6 @@
 """TDD tests for generic init and recovery flows.
 
-Covers C1/C2/C5 contracts:
+Covers:
 - Generic init creates parent and registry
 - Generic init detects existing config
 - Recovery lists pending journals
@@ -78,7 +78,7 @@ class TestListPendingRecoveries:
     def test_happy_finds_pending(self, tmp_path: Path) -> None:
         journals_dir = tmp_path / "journals"
         journals_dir.mkdir()
-        journal_data = {
+        journal_data: dict[str, object] = {
             "id": "test-journal-1",
             "operation": "create",
             "phase": "prepared",
@@ -98,7 +98,7 @@ class TestListPendingRecoveries:
     def test_happy_ignores_cleanup_complete(self, tmp_path: Path) -> None:
         journals_dir = tmp_path / "journals"
         journals_dir.mkdir()
-        journal_data = {
+        journal_data: dict[str, object] = {
             "id": "done-journal",
             "operation": "create",
             "phase": "cleanup-complete",
@@ -121,7 +121,7 @@ class TestRunRecovery:
     def test_happy_recover_valid_journal(self, tmp_path: Path) -> None:
         journals_dir = tmp_path / "journals"
         journals_dir.mkdir()
-        journal_data = {
+        journal_data: dict[str, object] = {
             "id": "rec-test",
             "operation": "edit",
             "phase": "prepared",
@@ -148,7 +148,7 @@ class TestRunRecoveryAll:
         journals_dir = tmp_path / "journals"
         journals_dir.mkdir()
         for i in range(2):
-            journal_data = {
+            journal_data: dict[str, object] = {
                 "id": f"batch-{i}",
                 "operation": "create",
                 "phase": "prepared",

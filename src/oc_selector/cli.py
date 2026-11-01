@@ -1,20 +1,21 @@
 """Typer management CLI and raw dispatch integration.
 
-C1: CLI routes management commands to typed handlers.
-C2: Raw dispatch forwards all non-management args to native opencode.
-C3: No author constants in installed src.
-C4: No silent fallbacks.
-C5: No network in CLI.
-C6: No secret material in logs.
-C7: No migration of legacy fields.
-C8: All mutations go through transaction.
-C9: Idempotent operations.
-C10: No conversion calls in CLI.
+CLI routes management commands to typed handlers.
+Raw dispatch forwards all non-management args to native opencode.
+No author constants in installed src.
+No silent fallbacks.
+No network in CLI.
+No secret material in logs.
+No migration of legacy fields.
+All mutations go through transaction.
+Idempotent operations.
+No conversion calls in CLI.
 """
 
 from __future__ import annotations
 
 import sys
+from typing import Annotated
 
 import typer
 
@@ -25,6 +26,7 @@ from oc_selector.init_flow import run_init, run_recovery_all
 from oc_selector.paths import resolve_config_parent, state_root
 from oc_selector.process import launch_native, resolve_executable
 from oc_selector.registry import load_registry
+from oc_selector.routing import NativeRoute
 from oc_selector.wizard import (
     CreateProfileInput,
     EditProfileInput,
@@ -62,9 +64,9 @@ def init() -> None:
 
 @app.command()
 def create(
-    name: str = typer.Argument(..., help="Profile name"),
-    directory: str = typer.Argument(..., help="Profile directory"),
-    model: str | None = typer.Option(None, "--model", "-m", help="Model ID"),
+    name: Annotated[str, typer.Argument(help="Profile name")],
+    directory: Annotated[str, typer.Argument(help="Profile directory")],
+    model: Annotated[str | None, typer.Option("--model", "-m", help="Model ID")] = None,
 ) -> None:
     """Create a new profile."""
     parent = resolve_config_parent()
@@ -79,9 +81,9 @@ def create(
 
 @app.command()
 def edit(
-    name: str = typer.Argument(..., help="Profile name"),
-    directory: str | None = typer.Option(None, "--directory", "-d", help="New directory"),
-    model: str | None = typer.Option(None, "--model", "-m", help="New model ID"),
+    name: Annotated[str, typer.Argument(help="Profile name")],
+    directory: Annotated[str | None, typer.Option("--directory", "-d", help="New directory")] = None,
+    model: Annotated[str | None, typer.Option("--model", "-m", help="New model ID")] = None,
 ) -> None:
     """Edit an existing profile."""
     parent = resolve_config_parent()
@@ -96,7 +98,7 @@ def edit(
 
 @app.command("set-default")
 def set_default_cmd(
-    name: str = typer.Argument(..., help="Profile name to set as default"),
+    name: Annotated[str, typer.Argument(help="Profile name to set as default")],
 ) -> None:
     """Set the default profile (registry-only)."""
     parent = resolve_config_parent()
@@ -139,7 +141,7 @@ def diagnostics() -> None:
 
 @app.command()
 def completion(
-    shell: str = typer.Argument(..., help="Shell: bash, zsh, fish, powershell"),
+    shell: Annotated[str, typer.Argument(help="Shell: bash, zsh, fish, powershell")],
 ) -> None:
     """Generate shell completion script."""
     parent = resolve_config_parent()
@@ -192,8 +194,9 @@ def main() -> None:
             _error_exit("No registry found. Run 'oc-selector init' first.", code=2)
 
         reg = load_registry(reg_path)
-        exe = resolve_executable(reg.opencode_executable)
-        launch_native(exe, args, reg)
+        resolve_executable(reg.opencode_executable)  # pre-validate (127 missing / 126 non-executable)
+        decision = NativeRoute(argv=tuple(args), profile_name=reg.default_profile)
+        launch_native(decision, reg)
     except OcSelectorError as exc:
         _error_exit(str(exc), code=2)
 

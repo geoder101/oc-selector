@@ -1,6 +1,6 @@
 """TDD tests for non-mutating four-shell completion.
 
-Covers C1/C2 contract:
+Covers:
 - All four shells generate valid scripts
 - Profile names included in completion
 - Management commands included

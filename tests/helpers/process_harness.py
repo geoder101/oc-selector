@@ -1,7 +1,7 @@
 """Isolated subprocess test harness.
 
 This module provides :class:`ProcessHarness`, the shared infrastructure used by
-every later task to exercise child processes in a fully isolated environment.
+the test suite to exercise child processes in a fully isolated environment.
 
 Guarantees:
 

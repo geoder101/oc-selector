@@ -1,6 +1,6 @@
 """TDD tests for guided create/edit wizard and set-default.
 
-Covers C1/C2/C8/C9 contracts:
+Covers:
 - Create wizard validates and creates profile
 - Edit wizard preserves existing fields
 - Set-default is registry-only
@@ -75,6 +75,7 @@ class TestCreateWizard:
         )
         result = run_create_wizard(inp, registry_path, state_root)
         assert result.success is False
+        assert result.error is not None
         assert "already exists" in result.error
 
     def test_failure_invalid_name(self, registry_path: Path, state_root: Path) -> None:
@@ -130,6 +131,7 @@ class TestEditWizard:
         )
         result = run_edit_wizard(inp, registry_path, state_root)
         assert result.success is False
+        assert result.error is not None
         assert "not found" in result.error
 
     def test_failure_empty_directory(self, registry_path: Path, state_root: Path) -> None:
@@ -158,6 +160,7 @@ class TestSetDefault:
     def test_failure_profile_not_found(self, registry_path: Path, state_root: Path) -> None:
         result = run_set_default("nonexistent", registry_path, state_root)
         assert result.success is False
+        assert result.error is not None
         assert "not found" in result.error
 
     def test_happy_set_same_default(self, registry_path: Path, state_root: Path) -> None:

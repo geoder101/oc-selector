@@ -1,6 +1,6 @@
 """TDD tests for raw dispatch and native process launcher.
 
-Covers C1/C2/C4 launch contract:
+Covers:
 - Executable resolution (127/126)
 - Environment building (OPENCODE_CONFIG_DIR, OMO_PROFILE, OCX_PROFILE)
 - Unmanaged vs owned profile env handling
@@ -105,7 +105,7 @@ class TestNativeRoute:
 
 class TestSelfRejection:
     def test_failure_self_identity(self, tmp_path: Path) -> None:
-        from oc_selector.process import _reject_self  # noqa: PLC0415
+        from oc_selector.process import _reject_self  # pyright: ignore[reportPrivateUsage]  # noqa: PLC0415
 
         exe = tmp_path / "wrapper"
         exe.write_text("#!/bin/sh\n")

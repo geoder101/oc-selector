@@ -1,6 +1,6 @@
 """TDD tests for host-package sync and node/npm adapter.
 
-Covers C1/C2/C5/C9 contracts:
+Covers:
 - Detect npm package from package.json
 - Detect pip package from pyproject.toml
 - Sync is idempotent

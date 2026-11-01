@@ -1,6 +1,6 @@
 """Raw dispatch and POSIX/Windows native process launcher.
 
-C1/C2/C4 launch contract:
+Launch contract:
 - Resolve to one absolute executable, use POSIX execve (no second PATH lookup).
 - Windows: supervised subprocess with inherited stdio/cwd.
 - Reject own wrapper file identity including links.
@@ -78,7 +78,7 @@ def build_launch_env(
 ) -> dict[str, str]:
     """Build the environment for a native launch.
 
-    C2 rules:
+    Environment rules:
     - Always set OPENCODE_CONFIG_DIR to exact selected directory.
     - Unmanaged (no omo_profile): preserve inherited OMO_PROFILE AND OCX_PROFILE.
     - Owned (has omo_profile): set OMO_PROFILE, clear OCX_PROFILE.

@@ -3,7 +3,7 @@
 Parses and validates the ``config.toml`` registry file using tomlkit (for
 comment preservation) and Pydantic v2 (for typed validation).
 
-C2 contract:
+Contract:
 - Schema version 1, default_profile, opencode_executable, profiles table.
 - Profile names: ``[a-z][a-z0-9-]{0,47}``, no casefold collisions, no device names.
 - Reserved management and native names rejected.
@@ -15,7 +15,7 @@ C2 contract:
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING, Self, cast
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -29,7 +29,7 @@ from oc_selector.errors import RegistryError
 
 _NAME_RE = re.compile(r"^[a-z][a-z0-9-]{0,47}$")
 
-# Reserved management tokens (C1)
+# Reserved management tokens
 MANAGEMENT_NAMES: frozenset[str] = frozenset(
     {
         "list",
@@ -45,7 +45,7 @@ MANAGEMENT_NAMES: frozenset[str] = frozenset(
     },
 )
 
-# Native safe superset (C1) - union with pinned actual commands from task 1 fixture
+# Native safe superset - union with the pinned actual command names from the upstream fixture
 NATIVE_NAMES: frozenset[str] = frozenset(
     {
         "completion",
@@ -89,7 +89,7 @@ RESERVED_NAMES: frozenset[str] = MANAGEMENT_NAMES | NATIVE_NAMES | _DEVICE_NAMES
 
 
 def validate_profile_name(name: str) -> str:
-    """Validate a profile name against C1/C2 rules. Returns the name if valid."""
+    """Validate a profile name against the naming rules. Returns the name if valid."""
     if not _NAME_RE.fullmatch(name):
         raise RegistryError(f"Invalid profile name: {name!r} (must match [a-z][a-z0-9-]{{0,47}})")
     if name in RESERVED_NAMES:
@@ -185,12 +185,15 @@ def _doc_to_registry(doc: tomlkit.TOMLDocument) -> Registry:
     for key in doc:
         if key not in known_keys:
             raise RegistryError(f"Unknown registry key: {key!r}")
+    # Cast the document to a plain mapping so ``.get`` has a known type.
+    typed_doc = cast("dict[str, object]", doc)
     # Extract profiles
-    profiles_doc = doc.get("profiles", {})
+    profiles_doc = cast("dict[str, object]", typed_doc.get("profiles", {}))
     profiles: dict[str, ProfileEntry] = {}
-    for name, entry_doc in profiles_doc.items():
-        if not isinstance(entry_doc, dict):
+    for name, raw_entry in profiles_doc.items():
+        if not isinstance(raw_entry, dict):
             raise RegistryError(f"Profile {name!r} is not a table")
+        entry_doc = cast("dict[str, object]", raw_entry)
         known_profile_keys = {"directory", "omo_profile"}
         kwargs: dict[str, str | None] = {}
         for key in entry_doc:
@@ -206,9 +209,9 @@ def _doc_to_registry(doc: tomlkit.TOMLDocument) -> Registry:
         )
     try:
         return Registry(
-            schema_version=int(doc.get("schema_version", 1)),
-            default_profile=str(doc.get("default_profile", "")),
-            opencode_executable=str(doc.get("opencode_executable", "opencode")),
+            schema_version=int(cast("int", typed_doc.get("schema_version", 1))),
+            default_profile=str(cast("str", typed_doc.get("default_profile", ""))),
+            opencode_executable=str(cast("str", typed_doc.get("opencode_executable", "opencode"))),
             profiles=profiles,
         )
     except ValueError as e:

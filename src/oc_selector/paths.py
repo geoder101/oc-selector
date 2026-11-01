@@ -1,6 +1,6 @@
 """Portable path resolution for oc-selector state and configuration.
 
-C2 contract:
+Contract:
 - Parent is absolute ``XDG_CONFIG_HOME`` if set, otherwise ``Path.home() / '.config'``.
 - Reject relative/empty explicitly set XDG values.
 - State root is ``<parent>/oc-selector``.

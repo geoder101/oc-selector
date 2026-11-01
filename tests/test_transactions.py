@@ -1,6 +1,6 @@
 """TDD tests for recoverable transactions, private backups and locks.
 
-Covers C4 contract:
+Covers:
 - Lock acquisition and release
 - Journal state machine transitions
 - File staging and commit
@@ -13,6 +13,7 @@ Covers C4 contract:
 from __future__ import annotations
 
 from pathlib import Path  # noqa: TC003
+from typing import cast
 
 import pytest
 
@@ -112,7 +113,8 @@ class TestJournal:
         d = journal_to_dict(j)
         assert d["id"] == "test-id"
         assert d["phase"] == "prepared"
-        assert d["resources"][0]["path"] == "/tmp/test"
+        resources = cast("list[dict[str, object]]", d["resources"])
+        assert resources[0]["path"] == "/tmp/test"
 
     def test_happy_read_missing_journal(self, tmp_path: Path) -> None:
         result = read_journal(tmp_path / "nonexistent.json")

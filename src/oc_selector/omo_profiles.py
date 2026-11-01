@@ -1,6 +1,6 @@
 """Parameterized legacy conversion and modern native projections.
 
-C3 contract:
+Conversion contract:
 - Installed conversion helpers accept typed model IDs, profile/native names,
   plugin pins and field policies as parameters.
 - No author model/provider/name defaults or recipe resources in installed src.
@@ -12,7 +12,7 @@ C3 contract:
 - Preserve provider/reference text without opening secret targets.
 - Unknown unsupported fields fail before commit, not silently discarded.
 
-C10 modern projection:
+Modern projection:
 - Separate from legacy conversion.
 - Singleton models across covered existing supported roster.
 - Preserve permissions/hooks/non-models.
@@ -23,11 +23,11 @@ C10 modern projection:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import cast
 
 from oc_selector.errors import SchemaValidationError
 
-# Core agent names that receive core overrides (C3)
+# Core agent names that receive core overrides
 CORE_AGENT_NAMES: frozenset[str] = frozenset(
     {"build", "general", "explore", "plan", "compaction", "title", "summary"},
 )
@@ -40,8 +40,8 @@ HARNESS_KEY = "[opencode]"
 class ConversionInput:
     """Typed input for legacy-to-native conversion."""
 
-    agents: dict[str, dict[str, Any]] = field(default_factory=dict)
-    categories: dict[str, dict[str, Any]] = field(default_factory=dict)
+    agents: dict[str, dict[str, object]] = field(default_factory=dict)
+    categories: dict[str, dict[str, object]] = field(default_factory=dict)
     disabled_hooks: list[str] = field(default_factory=list)
 
 
@@ -49,13 +49,13 @@ class ConversionInput:
 class ConversionResult:
     """Typed output of legacy-to-native conversion."""
 
-    profiles_entry: dict[str, Any] = field(default_factory=dict)
-    harness_entry: dict[str, Any] = field(default_factory=dict)
+    profiles_entry: dict[str, object] = field(default_factory=dict)
+    harness_entry: dict[str, object] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
 
 
 def convert_legacy_to_native(  # noqa: C901, PLR0912
-    owned_name: str,  # noqa: ARG001
+    owned_name: str,  # noqa: ARG001  # pyright: ignore[reportUnusedParameter]
     input_data: ConversionInput,
 ) -> ConversionResult:
     """Convert legacy OMO fields to native profile entry structure.
@@ -72,24 +72,28 @@ def convert_legacy_to_native(  # noqa: C901, PLR0912
 
     """
     warnings: list[str] = []
-    agents_out: dict[str, Any] = {}
-    categories_out: dict[str, Any] = {}
-    harness_agents: dict[str, Any] = {}
+    agents_out: dict[str, object] = {}
+    categories_out: dict[str, object] = {}
+    harness_agents: dict[str, object] = {}
 
     # Convert agents
     for agent_name, agent_fields in input_data.agents.items():
-        agent_entry: dict[str, Any] = {}
+        agent_entry: dict[str, object] = {}
         if "model" in agent_fields:
             agent_entry["models"] = [agent_fields["model"]]
         if "fallback_models" in agent_fields:
             fallbacks = agent_fields["fallback_models"]
             if isinstance(fallbacks, list):
-                agent_entry.setdefault("models", []).extend(fallbacks)
+                cast("list[object]", agent_entry.setdefault("models", [])).extend(
+                    cast("list[object]", fallbacks),
+                )
             else:
-                agent_entry.setdefault("models", []).append(fallbacks)
+                cast("list[object]", agent_entry.setdefault("models", [])).append(fallbacks)
         # Permission goes under harness key
         if "permission" in agent_fields:
-            harness_agents.setdefault(agent_name, {})["permission"] = agent_fields["permission"]
+            cast("dict[str, object]", harness_agents.setdefault(agent_name, {}))["permission"] = (
+                agent_fields["permission"]
+            )
         # Unknown fields
         known = {"model", "fallback_models", "permission"}
         for k in agent_fields:
@@ -102,15 +106,17 @@ def convert_legacy_to_native(  # noqa: C901, PLR0912
 
     # Convert categories
     for cat_name, cat_fields in input_data.categories.items():
-        cat_entry: dict[str, Any] = {}
+        cat_entry: dict[str, object] = {}
         if "model" in cat_fields:
             cat_entry["models"] = [cat_fields["model"]]
         if "fallback_models" in cat_fields:
             fallbacks = cat_fields["fallback_models"]
             if isinstance(fallbacks, list):
-                cat_entry.setdefault("models", []).extend(fallbacks)
+                cast("list[object]", cat_entry.setdefault("models", [])).extend(
+                    cast("list[object]", fallbacks),
+                )
             else:
-                cat_entry.setdefault("models", []).append(fallbacks)
+                cast("list[object]", cat_entry.setdefault("models", [])).append(fallbacks)
         known = {"model", "fallback_models"}
         for k in cat_fields:
             if k not in known:
@@ -121,14 +127,14 @@ def convert_legacy_to_native(  # noqa: C901, PLR0912
             categories_out[cat_name] = cat_entry
 
     # Build the native profile entry
-    profile_entry: dict[str, Any] = {}
+    profile_entry: dict[str, object] = {}
     if agents_out:
         profile_entry["agents"] = agents_out
     if categories_out:
         profile_entry["categories"] = categories_out
 
     # Build the harness entry
-    harness: dict[str, Any] = {}
+    harness: dict[str, object] = {}
     if harness_agents:
         harness["agents"] = harness_agents
     if input_data.disabled_hooks:
@@ -142,12 +148,12 @@ def convert_legacy_to_native(  # noqa: C901, PLR0912
 
 
 def build_native_entry(
-    owned_name: str,  # noqa: ARG001
+    owned_name: str,  # noqa: ARG001  # pyright: ignore[reportUnusedParameter]
     model: str | None = None,
     agents: dict[str, list[str]] | None = None,
     categories: dict[str, list[str]] | None = None,
-) -> dict[str, Any]:
-    """Build a modern native profile entry (C10 projection).
+) -> dict[str, object]:
+    """Build a modern native profile entry.
 
     Args:
         owned_name: The owned profile name.
@@ -159,7 +165,7 @@ def build_native_entry(
         A dict representing the native profile entry.
 
     """
-    entry: dict[str, Any] = {}
+    entry: dict[str, object] = {}
     if model is not None:
         entry["model"] = model
     if agents:

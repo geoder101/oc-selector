@@ -1,15 +1,15 @@
 """Exact host-package sync and node/npm adapter.
 
-C1: Host-package sync is exact, no drift.
-C2: Node/npm adapter detects and manages the host package.
-C3: No author constants in installed src.
-C4: No silent fallbacks.
-C5: No network in sync (only local file operations).
-C6: No secret material in logs.
-C7: No migration of legacy fields.
-C8: All mutations go through transaction.
-C9: Idempotent operations.
-C10: No conversion calls.
+Host-package sync is exact, no drift.
+Node/npm adapter detects and manages the host package.
+No author constants in installed src.
+No silent fallbacks.
+No network in sync (only local file operations).
+No secret material in logs.
+No migration of legacy fields.
+All mutations go through transaction.
+Idempotent operations.
+No conversion calls.
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ import json
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path  # noqa: TC003
+from typing import cast
 
 from oc_selector.errors import (
     MaintenanceError,
@@ -63,9 +64,9 @@ def detect_host_package(
     pkg_json = project_root / "package.json"
     if pkg_json.exists():
         try:
-            data = json.loads(pkg_json.read_text())
-            name = data.get("name", "unknown")
-            version = data.get("version", "0.0.0")
+            data = cast("dict[str, object]", json.loads(pkg_json.read_text()))
+            name = cast("str", data.get("name", "unknown"))
+            version = cast("str", data.get("version", "0.0.0"))
             return HostPackageInfo(
                 name=name,
                 version=version,
