@@ -1,0 +1,18 @@
+{
+    // Main config
+    "model": "test/provider/model",
+    "agents": {
+        "build": {
+            "model": "test/provider/build-model"
+        },
+        "explore": {
+            "model": "test/provider/explore-model"
+        }
+    },
+    /* Block comment for categories */
+    "categories": {
+        "quick": {
+            "model": "test/provider/quick-model"
+        }
+    }
+}
