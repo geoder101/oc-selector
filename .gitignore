@@ -1,0 +1,28 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+
+# NOTE: uv.lock is intentionally NOT ignored; it is committed for reproducible builds.
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.basedpyright/
+.pytype/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store

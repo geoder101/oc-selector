@@ -1,0 +1,19 @@
+{
+  // Generic legacy OMO config fixture for conversion testing.
+  // This is NOT personal data: every model id is a synthetic test/provider value.
+  "agents": {
+    "build": {
+      "model": "test/provider/model-a",
+      "fallback_models": ["test/provider/model-b"]
+    },
+    "explore": {
+      "model": "test/provider/model-c"
+    }
+  },
+  "categories": {
+    "quick": {
+      "model": "test/provider/model-d"
+    }
+  },
+  "disabled_hooks": ["test-hook"]
+}

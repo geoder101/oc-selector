@@ -1,0 +1,31 @@
+{
+  "opencode": {
+    "version": "1.19.5",
+    "config_source": "https://raw.githubusercontent.com/anomalyco/opencode/v1.19.5/packages/opencode/src/config/config.ts",
+    "config_source_sha256": "839c934f014c29a40f06cafd8bf2da1f0b2976ecd9e3e0f71b859792837ab14d",
+    "config_paths_source": "https://raw.githubusercontent.com/anomalyco/opencode/v1.19.5/packages/opencode/src/config/paths.ts",
+    "config_paths_source_sha256": "cd86a34461b27caf1042f8cba140fbbed47790c4f30cd9691f87298e8d4d444",
+    "global_source": "https://raw.githubusercontent.com/anomalyco/opencode/v1.19.5/packages/core/src/global.ts",
+    "global_source_sha256": "37c9aae045e01cd246cd4d8c489e84ea4849b6297d3a6f9ff9b1bca57f85c013",
+    "npm_source": "https://raw.githubusercontent.com/anomalyco/opencode/v1.19.5/packages/core/src/npm.ts",
+    "npm_source_sha256": "f8b7a8e65606a2738cc1a5074860585b92a549643e9ea0a8101c346d1c390193"
+  },
+  "omo": {
+    "version": "5.1.51",
+    "plugin_config_source": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/v5.1.51/packages/omo-opencode/src/plugin-config.ts",
+    "plugin_config_source_sha256": "0b421f7479057cc46a4dc7be9ec2848e6f4fef5a9b4acd1f7dada94a75132f86",
+    "schema_commit": "c8955517dd95d2d8dd1ed6c871705a2eb9921840",
+    "native_schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/c8955517dd95d2d8dd1ed6c871705a2eb9921840/assets/omo.schema.json",
+    "native_schema_sha256": "bb72795f08e14786fbf3218119c7bd7cadbbeda2df233e76eed96d06e5ee8701",
+    "npm_metadata": "https://registry.npmjs.org/oh-my-openagent/5.1.51",
+    "npm_metadata_sha256": "1e395607b47d0e46662a79ff95fa57f17b2c2681b0dfeb6b3f64ef8f8ca2178f",
+    "npm_integrity": "sha512-RaYyjD/VNMlhp3hOnzzlCWQMcPxPYBwbDwSrrajZfNpK5aUP0LLdtawClsMeXhoBu7C7bl1VPqGNjGXyX2FcZg=="
+  },
+  "json_five": {
+    "version": "1.1.2",
+    "source": "https://github.com/spyoungtech/json-five/blob/da1c38f8a4c37f3555f830dd01f68e6c9c96a152/README.md",
+    "source_commit": "da1c38f8a4c37f3555f830dd01f68e6c9c96a152",
+    "raw_source": "https://raw.githubusercontent.com/spyoungtech/json-five/da1c38f8a4c37f3555f830dd01f68e6c9c96a152/README.md",
+    "raw_source_sha256": "56bea81a5e78b13f8a2c9f2d218e6b293d50978a535443d5ea89d2137fbdbd38"
+  }
+}

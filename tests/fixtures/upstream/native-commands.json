@@ -1,0 +1,26 @@
+{
+  "source": "pinned OpenCode v1.19.5 CLI source",
+  "version": "1.19.5",
+  "commands": [
+    "acp",
+    "agent",
+    "attach",
+    "auth",
+    "completion",
+    "db",
+    "debug",
+    "export",
+    "github",
+    "import",
+    "mcp",
+    "models",
+    "pr",
+    "run",
+    "serve",
+    "session",
+    "stats",
+    "uninstall",
+    "upgrade",
+    "web"
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "source": "pinned OMO v5.1.51 schema",
+  "schema_commit": "c8955517dd95d2d8dd1ed6c871705a2eb9921840",
+  "core_agents": [
+    "build",
+    "general",
+    "explore",
+    "plan",
+    "compaction",
+    "title",
+    "summary"
+  ],
+  "categories": [
+    "quick",
+    "unspecified-low",
+    "unspecified-high",
+    "deep-low",
+    "deep-high",
+    "ultrabrain",
+    "artistry",
+    "writing"
+  ],
+  "note": "Complete pinned roster for compatibility fixtures. New versions require fixture update."
+}
