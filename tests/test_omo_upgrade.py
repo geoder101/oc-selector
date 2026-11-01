@@ -80,7 +80,10 @@ class TestRunOmoUpgrade:
         assert "already valid" in result.message
 
     def test_happy_upgrade_with_new_config(
-        self, valid_config: Path, schema: OmoSchema, tmp_path: Path,
+        self,
+        valid_config: Path,
+        schema: OmoSchema,
+        tmp_path: Path,
     ) -> None:
         state_root = tmp_path / "state"
         state_root.mkdir()
@@ -92,7 +95,10 @@ class TestRunOmoUpgrade:
         assert data["name"] == "updated-omo"
 
     def test_failure_invalid_new_config(
-        self, valid_config: Path, schema: OmoSchema, tmp_path: Path,
+        self,
+        valid_config: Path,
+        schema: OmoSchema,
+        tmp_path: Path,
     ) -> None:
         state_root = tmp_path / "state"
         state_root.mkdir()
@@ -102,7 +108,10 @@ class TestRunOmoUpgrade:
         assert "validation failed" in result.message
 
     def test_happy_idempotent_validation(
-        self, valid_config: Path, schema: OmoSchema, tmp_path: Path,
+        self,
+        valid_config: Path,
+        schema: OmoSchema,
+        tmp_path: Path,
     ) -> None:
         state_root = tmp_path / "state"
         state_root.mkdir()

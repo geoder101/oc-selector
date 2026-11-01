@@ -171,8 +171,14 @@ def main() -> None:
 
     # Check for management commands
     management_cmds = {
-        "init", "create", "edit", "set-default",
-        "list", "diagnostics", "completion", "recover",
+        "init",
+        "create",
+        "edit",
+        "set-default",
+        "list",
+        "diagnostics",
+        "completion",
+        "recover",
     }
     if args and args[0] in management_cmds:
         app(args=args, prog_name="oc-selector")

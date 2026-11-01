@@ -42,7 +42,8 @@ class TestFullUserWorkflow:
     """Prove the complete user lifecycle works end-to-end."""
 
     def test_happy_init_create_edit_setdefault_list(
-        self, isolated_env: Path,
+        self,
+        isolated_env: Path,
     ) -> None:
         # 1. Init
         r = runner.invoke(app, ["init"])
@@ -84,7 +85,8 @@ class TestFullUserWorkflow:
         assert "personal" in reg.profiles
 
     def test_happy_source_only_setup(
-        self, isolated_env: Path,
+        self,
+        isolated_env: Path,
     ) -> None:
         """Source-only personal setup: no OMO conversion, just native profiles."""
         # Init
@@ -100,7 +102,8 @@ class TestFullUserWorkflow:
         assert reg.profiles["native-only"].omo_profile is None
 
     def test_happy_completion_all_shells(
-        self, isolated_env: Path,  # noqa: ARG002
+        self,
+        isolated_env: Path,  # noqa: ARG002
     ) -> None:
         """Completion works for all four shells after init."""
         runner.invoke(app, ["init"])
@@ -111,7 +114,8 @@ class TestFullUserWorkflow:
             assert "oc-selector" in r.output
 
     def test_happy_diagnostics_after_init(
-        self, isolated_env: Path,  # noqa: ARG002
+        self,
+        isolated_env: Path,  # noqa: ARG002
     ) -> None:
         """Diagnostics runs successfully after init."""
         runner.invoke(app, ["init"])
@@ -119,7 +123,8 @@ class TestFullUserWorkflow:
         assert r.exit_code == 0
 
     def test_happy_recover_no_pending(
-        self, isolated_env: Path,  # noqa: ARG002
+        self,
+        isolated_env: Path,  # noqa: ARG002
     ) -> None:
         """Recover with no pending journals is a no-op."""
         runner.invoke(app, ["init"])
@@ -132,7 +137,8 @@ class TestErrorPaths:
     """Prove error handling works correctly through the CLI."""
 
     def test_failure_create_duplicate(
-        self, isolated_env: Path,  # noqa: ARG002
+        self,
+        isolated_env: Path,  # noqa: ARG002
     ) -> None:
         runner.invoke(app, ["init"])
         runner.invoke(app, ["create", "test", "dir"])
@@ -141,7 +147,8 @@ class TestErrorPaths:
         assert "already exists" in r.output
 
     def test_failure_edit_nonexistent(
-        self, isolated_env: Path,  # noqa: ARG002
+        self,
+        isolated_env: Path,  # noqa: ARG002
     ) -> None:
         runner.invoke(app, ["init"])
         r = runner.invoke(app, ["edit", "ghost", "--directory", "dir"])
@@ -149,7 +156,8 @@ class TestErrorPaths:
         assert "not found" in r.output
 
     def test_failure_setdefault_nonexistent(
-        self, isolated_env: Path,  # noqa: ARG002
+        self,
+        isolated_env: Path,  # noqa: ARG002
     ) -> None:
         runner.invoke(app, ["init"])
         r = runner.invoke(app, ["set-default", "ghost"])
@@ -157,7 +165,9 @@ class TestErrorPaths:
         assert "not found" in r.output
 
     def test_failure_list_no_registry(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "empty"))
         monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
@@ -170,7 +180,8 @@ class TestIdempotency:
     """Prove operations are idempotent."""
 
     def test_happy_init_idempotent(
-        self, isolated_env: Path,  # noqa: ARG002
+        self,
+        isolated_env: Path,  # noqa: ARG002
     ) -> None:
         r1 = runner.invoke(app, ["init"])
         r2 = runner.invoke(app, ["init"])
@@ -179,7 +190,8 @@ class TestIdempotency:
         assert "Already" in r2.output
 
     def test_happy_setdefault_idempotent(
-        self, isolated_env: Path,  # noqa: ARG002
+        self,
+        isolated_env: Path,  # noqa: ARG002
     ) -> None:
         runner.invoke(app, ["init"])
         r1 = runner.invoke(app, ["set-default", "default"])
