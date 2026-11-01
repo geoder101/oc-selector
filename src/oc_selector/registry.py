@@ -15,15 +15,18 @@ Contract:
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Self, cast
+from typing import TYPE_CHECKING, ClassVar, Self
 
 if TYPE_CHECKING:
     from pathlib import Path
 
 import tomlkit
-from pydantic import BaseModel, Field, field_serializer, model_validator
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_serializer, model_validator
 
 from oc_selector.errors import RegistryError
+
+# Normalizes tomlkit mappings (unparameterized in stubs) to plain typed dicts.
+_PLAIN_DICT_ADAPTER: TypeAdapter[dict[str, object]] = TypeAdapter(dict[str, object])
 
 # --- Name validation constants ---
 
@@ -117,6 +120,8 @@ def _check_casefold_collision(name: str, existing: set[str]) -> None:
 class ProfileEntry(BaseModel):
     """A single profile entry in the registry."""
 
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid", frozen=True, strict=True, validate_default=True)
+
     directory: str = Field(min_length=1)
     model: str | None = None
     omo_profile: str | None = None
@@ -128,6 +133,8 @@ class ProfileEntry(BaseModel):
 
 class Registry(BaseModel):
     """The full oc-selector registry (config.toml)."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid", frozen=True, strict=True, validate_default=True)
 
     schema_version: int = Field(default=1)
     default_profile: str
@@ -179,41 +186,52 @@ def parse_registry(data: str) -> Registry:
     return _doc_to_registry(doc)
 
 
+def _coerce_schema_version(raw: object) -> int:
+    """Coerce a raw schema_version value to int, preserving int() semantics."""
+    if isinstance(raw, int | str | float):
+        return int(raw)
+    raise RegistryError(f"Unsupported schema_version: {raw!r}")
+
+
 def _doc_to_registry(doc: tomlkit.TOMLDocument) -> Registry:
     """Convert a tomlkit document to a validated Registry."""
+    typed_doc: dict[str, object] = _PLAIN_DICT_ADAPTER.validate_python(doc)
     # Check for unknown top-level keys
     known_keys = {"schema_version", "default_profile", "opencode_executable", "profiles"}
-    for key in doc:
+    for key in typed_doc:
         if key not in known_keys:
             raise RegistryError(f"Unknown registry key: {key!r}")
-    # Cast the document to a plain mapping so ``.get`` has a known type.
-    typed_doc = cast("dict[str, object]", doc)
     # Extract profiles
-    profiles_doc = cast("dict[str, object]", typed_doc.get("profiles", {}))
+    raw_profiles = typed_doc.get("profiles", {})
+    if not isinstance(raw_profiles, dict):
+        raise RegistryError("Registry 'profiles' must be a table")
+    profiles_doc: dict[str, object] = _PLAIN_DICT_ADAPTER.validate_python(raw_profiles)
     profiles: dict[str, ProfileEntry] = {}
     for name, raw_entry in profiles_doc.items():
         if not isinstance(raw_entry, dict):
             raise RegistryError(f"Profile {name!r} is not a table")
-        entry_doc = cast("dict[str, object]", raw_entry)
+        entry_doc: dict[str, object] = _PLAIN_DICT_ADAPTER.validate_python(raw_entry)
         known_profile_keys = {"directory", "omo_profile", "model"}
         kwargs: dict[str, str | None] = {}
-        for key in entry_doc:
+        for key, val in entry_doc.items():
             if key not in known_profile_keys:
                 raise RegistryError(f"Unknown profile key {key!r} in profile {name!r}")
-            val = entry_doc[key]
             kwargs[key] = str(val) if val is not None else None
         if "directory" not in kwargs or not kwargs["directory"]:
             raise RegistryError(f"Profile {name!r} missing required 'directory'")
         profiles[name] = ProfileEntry(
-            directory=kwargs["directory"],  # type: ignore[arg-type]
+            directory=kwargs["directory"],
             model=kwargs.get("model"),
             omo_profile=kwargs.get("omo_profile"),
         )
+    schema_version_raw = typed_doc.get("schema_version", 1)
+    default_profile_raw = typed_doc.get("default_profile", "")
+    executable_raw = typed_doc.get("opencode_executable", "opencode")
     try:
         return Registry(
-            schema_version=int(cast("int", typed_doc.get("schema_version", 1))),
-            default_profile=str(cast("str", typed_doc.get("default_profile", ""))),
-            opencode_executable=str(cast("str", typed_doc.get("opencode_executable", "opencode"))),
+            schema_version=_coerce_schema_version(schema_version_raw),
+            default_profile=str(default_profile_raw),
+            opencode_executable=str(executable_raw),
             profiles=profiles,
         )
     except ValueError as e:
