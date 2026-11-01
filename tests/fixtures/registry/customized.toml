@@ -1,0 +1,15 @@
+# Customized registry with multiple profiles
+schema_version = 1
+default_profile = 'gpt'
+opencode_executable = '/usr/local/bin/opencode'
+
+[profiles.default]
+directory = 'opencode'
+
+[profiles.gpt]
+directory = 'opencode_gpt'
+omo_profile = 'oc-selector-gpt'
+
+[profiles.local]
+directory = 'opencode_local'
+omo_profile = 'oc-selector-local'

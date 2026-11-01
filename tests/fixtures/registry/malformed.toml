@@ -1,0 +1,7 @@
+schema_version = 1
+default_profile = 'default'
+opencode_executable = 'opencode'
+unknown_key = 'should fail'
+
+[profiles.default]
+directory = 'opencode'

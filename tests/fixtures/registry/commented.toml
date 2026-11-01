@@ -1,0 +1,7 @@
+# This is a comment that should be preserved
+schema_version = 1
+default_profile = 'default'  # inline comment
+opencode_executable = 'opencode'
+
+[profiles.default]
+directory = 'opencode'  # the main profile

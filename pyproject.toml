@@ -37,13 +37,16 @@ line-length = 120
 [tool.ruff.lint]
 select = ["ALL"]
 # Copyright is tracked in the LICENSE file, not per-file headers.
-ignore = ["CPY001"]
+# TRY003/EM101/EM102 conflict with each other and with Python's natural
+# exception-raising pattern; messages are kept inline for clarity.
+ignore = ["CPY001", "TRY003", "EM101", "EM102"]
 
 [tool.ruff.lint.per-file-ignores]
 # Test code may assert, compare against small literals, and use fixed temp names.
 # tests/ is an implicit namespace package (no __init__.py by design) and the
 # harness intentionally runs subprocesses against trusted fixture executables.
-"tests/**" = ["S101", "PLR2004", "S108", "INP001", "S603"]
+# D102 (missing docstring in method) is noise for test methods.
+"tests/**" = ["S101", "PLR2004", "S108", "INP001", "S603", "D102", "D101"]
 # tools/verify.py is a subprocess evidence recorder; it intentionally shells out
 # to arbitrary commands and writes to caller-supplied evidence paths.
 "tools/verify.py" = ["S603", "S607", "S108", "INP001"]
