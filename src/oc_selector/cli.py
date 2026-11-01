@@ -124,12 +124,17 @@ def list_profiles() -> None:
 @app.command()
 def diagnostics() -> None:
     """Collect and display diagnostics."""
-    result = collect_diagnostics()
-    typer.echo(f"OpenCode version: {result.opencode_version}")
-    typer.echo(f"Profiles: {len(result.profile_health)}")
-    for name, health in result.profile_health.items():
-        status = "OK" if health.healthy else "ISSUE"
-        typer.echo(f"  {name}: {status}")
+    parent = resolve_config_parent()
+    reg_path = parent / "config.toml"
+    reg = None
+    if reg_path.exists():
+        reg = load_registry(reg_path)
+    result = collect_diagnostics(reg)
+    typer.echo(f"OpenCode: {result.opencode.get('version', 'unknown')}")
+    typer.echo(f"Default profile: {result.default_profile or 'none'}")
+    typer.echo(f"Profiles: {len(result.profiles)}")
+    for p in result.profiles:
+        typer.echo(f"  {p.name}: {p.status}")
 
 
 @app.command()
