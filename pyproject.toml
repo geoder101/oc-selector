@@ -28,6 +28,13 @@ dev = [
     "pytest>=8.0",
     "ruff>=0.4",
     "basedpyright>=0.16",
+    "coverage[toml]==7.17.0",
+    "pytest-cov==7.1.0",
+]
+docs = [
+    "furo==2025.12.19",
+    "sphinx==9.1.1",
+    "sphinx-autoapi==3.9.0",
 ]
 
 [tool.ruff]
@@ -53,8 +60,27 @@ ignore = ["CPY001", "TRY003", "EM101", "EM102"]
 # Shell completion scripts are inherently long single-line constructs.
 "src/oc_selector/completion.py" = ["E501"]
 
+[tool.coverage.run]
+branch = true
+source = ["oc_selector"]
+
+[tool.coverage.report]
+# Audited `case _:` + `assert_never()` exhaustiveness guards are dead-code proofs,
+# not untested behavior; exclude them from the coverage denominator. T17 may append
+# justified line-level entries only (never whole-file/whole-function).
+exclude_also = [
+    # (?m:^[ \t]*case _:[ \t]*\r?\n[ \t]+assert_never\(
+]
+
+[tool.coverage.html]
+directory = "coverage/html"
+
+[tool.coverage.json]
+output = "coverage/coverage.json"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = ["-ra", "--strict-config", "--strict-markers"]
 markers = [
     "real_runtime: tests requiring real pinned runtime (VM only)",
     "console: tests requiring terminal/pty interaction",

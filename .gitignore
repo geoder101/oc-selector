@@ -15,6 +15,13 @@ venv/
 
 # NOTE: uv.lock is intentionally NOT ignored; it is committed for reproducible builds.
 
+# Coverage reports (raw data is pinned under coverage/ via COVERAGE_FILE)
+coverage/
+
+# Documentation build output and generated API reference
+docs/_build/
+docs/reference/api/
+
 # Tooling caches
 .pytest_cache/
 .ruff_cache/
