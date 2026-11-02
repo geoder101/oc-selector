@@ -106,26 +106,49 @@ directory = "work-dir"
 directory = "personal-dir"
 ```
 
+## Documentation
+
+The full documentation site (tutorials, how-to guides, reference, and explanation)
+lives in `docs/` and is built with Sphinx. Build and preview it locally:
+
+```bash
+just docs-check       # clean build, then a strict (-W) HTML build
+just docs-preview 8000  # build, then serve docs/_build/html on port 8000
+```
+
+The generated API reference under `docs/reference/api/` documents the **internal**
+Python modules of the package; it is **not** a supported public API. The only
+supported interface is the `oc-selector` command-line tool.
+
+The site is deployed to GitHub Pages from the default branch; the site URL is the
+deployment output URL shown by the `Documentation Pages` workflow's `deploy` job
+(see [.github/workflows/README.md](.github/workflows/README.md)).
+
 ## Exit Codes
 
 | Code | Meaning |
 |------|---------|
 | 0 | Success |
-| 1 | Maintenance error (lock, transaction) |
-| 2 | Argument or registry error |
-| 127 | Native executable not found |
-| 126 | Native executable not executable |
+| 1 | Maintenance or argument error (native-forward and registry-load error paths exit 1 with a traceback) |
+| 2 | Argument or registry error (clean, from a management command) |
 | 130 | User interruption (Ctrl+C) |
+| *native-forwarded* | The native `opencode` command's own exit code |
+
+The missing-executable and non-executable native cases are **not** emitted as
+distinct 127/126 codes today: they surface as exit 1 with a traceback on the
+native-forward path (a known limitation). See
+[docs/reference/exit-codes.rst](docs/reference/exit-codes.rst) for the full
+verified table.
 
 ## Development
 
 Development is driven by the [just](https://github.com/casey/just) task runner.
 `just check` is the single gate: it runs lock-check, format-check, lint, typecheck,
-test, and build in order. Every operation has a recipe:
+test, docs-check, and build in order. Every operation has a recipe:
 
 ```bash
 just sync          # verify the lockfile, then sync the dev environment
-just check         # the single gate (lock-check, format-check, lint, typecheck, test, build)
+just check         # the single gate (lock-check, format-check, lint, typecheck, test, docs-check, build)
 just test          # run the test suite (forward extra args to pytest)
 just format        # apply the formatter
 just format-check  # check formatting without changing files
@@ -133,6 +156,10 @@ just lint          # run the linter
 just typecheck     # type-check with basedpyright
 just cli <args>    # run the CLI, forwarding args to oc-selector
 just build         # build the sdist and wheel
+just docs-check    # strict (-W) Sphinx docs build
+just docs-preview <port>  # build, then serve the docs site on <port>
+just coverage      # run the suite with coverage (exploratory, no threshold)
+just coverage-check  # the fresh full-suite combined coverage gate (90% threshold)
 ```
 
 Without Just (machines that lack it), the equivalent raw commands are:

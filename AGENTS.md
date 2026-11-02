@@ -8,11 +8,11 @@ forwards all remaining args to `opencode` byte-for-byte.
 
 Development is driven by the [just](https://github.com/casey/just) task runner.
 `just check` is the single gate: lock-check, format-check, lint, typecheck, test,
-build — in that order. Every operation has a recipe:
+docs-check, build — in that order. Every operation has a recipe:
 
 ```bash
 just sync          # verify the lockfile, then sync the dev environment
-just check         # the single gate (lock-check, format-check, lint, typecheck, test, build)
+just check         # the single gate (lock-check, format-check, lint, typecheck, test, docs-check, build)
 just test <args>   # tests  (single: just test tests/test_x.py::test_y)
 just format        # apply the formatter
 just format-check  # check formatting without changing files
@@ -20,6 +20,10 @@ just lint          # run the linter
 just typecheck     # type-check with basedpyright
 just cli <args>    # run the CLI, forwarding args to oc-selector
 just build         # build (success message goes to STDERR, not stdout)
+just docs-check    # strict (-W) Sphinx docs build (pip-only, no Node/TeX)
+just docs-preview <port>  # build, then serve the docs site on <port>
+just coverage <args>  # coverage run (exploratory, no threshold)
+just coverage-check   # the fresh full-suite combined coverage gate (90% threshold)
 ```
 
 Without Just (machines that lack it), the raw equivalents are: `uv lock --check &&
@@ -37,6 +41,10 @@ considering work done.
   AND 0 warnings. It also **exits 3 if any `include` path is missing** — the
   `typings/` dir must exist (`.gitkeep` is enough) or the gate dies with exit 3,
   which is *not* a type error.
+- **Coverage is opt-in and out of `just check`** — run `just coverage` /
+  `just coverage-check` explicitly; the 90% gate is not part of the single gate.
+- **The docs build is strict `-W` and pip-only** — any Sphinx warning fails
+  `just docs-check`, and it needs no Node/TeX (it is part of `just check`).
 
 ## Architecture
 
