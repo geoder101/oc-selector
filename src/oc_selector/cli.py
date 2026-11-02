@@ -23,6 +23,7 @@ from pathlib import Path  # noqa: TC003
 from typing import Annotated, NoReturn, cast
 
 import typer
+from pydantic import TypeAdapter, ValidationError
 
 from oc_selector import __version__
 from oc_selector.completion import generate_completion
@@ -51,6 +52,9 @@ app = typer.Typer(
 
 # Verified OpenCode 1.x release format; rejects dev/maintenance and 2.x.
 _RELEASE_RE = re.compile(r"^1\.\d+\.\d+$")
+
+# Normalizes parsed JSON values to plain typed dicts at the OMO config boundary.
+_PLAIN_DICT_ADAPTER: TypeAdapter[dict[str, object]] = TypeAdapter(dict[str, object])
 
 
 def _error_exit(message: str, code: int = 1) -> NoReturn:
@@ -100,12 +104,11 @@ def _eligible_profiles(reg: Registry, profile: str | None, *, all_profiles: bool
 def _read_omo_config(path: Path) -> dict[str, object]:
     """Read and shape the OMO config JSON object, or exit 2 if it is invalid."""
     try:
-        raw = cast("object", json.loads(path.read_text()))
+        return _PLAIN_DICT_ADAPTER.validate_python(json.loads(path.read_text()))
     except json.JSONDecodeError as exc:
         _error_exit(f"Invalid OMO config at {path}: {exc}", code=2)
-    if not isinstance(raw, dict):
+    except ValidationError:
         _error_exit(f"Invalid OMO config at {path}: expected a JSON object.", code=2)
-    return cast("dict[str, object]", raw)
 
 
 def _resolve_target_version(reg: Registry, explicit: str | None) -> str:

@@ -17,13 +17,17 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path  # noqa: TC003
-from typing import cast
+
+from pydantic import TypeAdapter, ValidationError
 
 from oc_selector.errors import (
     MaintenanceError,
     SchemaValidationError,
 )
 from oc_selector.transactions import Transaction
+
+# Normalizes parsed JSON values to plain typed dicts at the OMO config boundary.
+_PLAIN_DICT_ADAPTER: TypeAdapter[dict[str, object]] = TypeAdapter(dict[str, object])
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,13 +82,11 @@ def validate_omo_config(
         raise SchemaValidationError(f"Config not found: {config_path}")
 
     try:
-        raw = cast("object", json.loads(config_path.read_text()))
+        data = _PLAIN_DICT_ADAPTER.validate_python(json.loads(config_path.read_text()))
     except json.JSONDecodeError as exc:
         raise SchemaValidationError(f"Invalid JSON: {exc}") from exc
-
-    if not isinstance(raw, dict):
-        raise SchemaValidationError("Config must be a JSON object")
-    data = cast("dict[str, object]", raw)
+    except ValidationError:
+        raise SchemaValidationError("Config must be a JSON object") from None
 
     problem = _validate_config_dict(data, schema)
     if problem is not None:
@@ -119,9 +121,9 @@ def run_omo_upgrade(
     current_version = "unknown"
     if config_path.exists():
         try:
-            current_data = cast("dict[str, object]", json.loads(config_path.read_text()))
+            current_data = _PLAIN_DICT_ADAPTER.validate_python(json.loads(config_path.read_text()))
             current_version = str(current_data.get("version", "unknown"))
-        except (json.JSONDecodeError, OSError):
+        except (json.JSONDecodeError, OSError, ValidationError):
             current_version = "unknown"
 
     # If no new config, just validate existing
