@@ -13,6 +13,7 @@ Covers:
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path  # noqa: TC003
 
 import pytest
@@ -200,20 +201,30 @@ class TestPrivateModes:
         tx = Transaction(state_root, operation="test")
         tx.begin()
         tx.close()
-        mode = state_root.stat().st_mode & 0o777
-        assert mode == 0o700
+        # Windows st_mode does not reflect POSIX permission bits; the
+        # mode-bit equality is only meaningful on POSIX.
+        if sys.platform != "win32":
+            mode = state_root.stat().st_mode & 0o777
+            assert mode == 0o700
 
     def test_happy_journal_0600(self, state_root: Path) -> None:
         tx = Transaction(state_root, operation="test")
         tx.begin()
         tx.close()
         journal_path = state_root / "journals" / f"{tx.id}.json"
-        mode = journal_path.stat().st_mode & 0o777
-        assert mode == 0o600
+        # Windows st_mode does not reflect POSIX permission bits; the
+        # mode-bit equality is only meaningful on POSIX.
+        if sys.platform != "win32":
+            mode = journal_path.stat().st_mode & 0o777
+            assert mode == 0o600
 
 
 class TestLockContention:
     def test_failure_lock_held_by_other(self, state_root: Path) -> None:
+        # Cross-platform: portalocker LOCK_EX | LOCK_NB maps to flock(2) on
+        # POSIX and LockFileEx(LOCKFILE_FAIL_IMMEDIATELY) on Windows; both
+        # fail immediately when a second open file description holds the
+        # exclusive lock, so no platform skip is required.
         # First transaction holds the lock
         tx1 = Transaction(state_root, operation="first")
         tx1.begin()
