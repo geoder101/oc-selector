@@ -7,12 +7,18 @@ Covers:
 - Self-identity rejection
 - Native tail preservation
 - Dry-run creates no state files
+- Windows branch (subprocess returncode pass-through, KeyboardInterrupt 130)
+- POSIX branch (os.execve replaces a child process)
 """
 
 from __future__ import annotations
 
+import os
+import subprocess
 import sys
+from dataclasses import dataclass, field
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
@@ -32,6 +38,23 @@ if TYPE_CHECKING:
     from helpers.process_harness import ProcessHarness
 
 
+@dataclass(frozen=True, slots=True)
+class _FakeCompleted:
+    """Stand-in for subprocess.CompletedProcess carrying only a returncode."""
+
+    returncode: int
+
+
+@dataclass
+class _RunCapture:
+    """Arguments observed by the fake subprocess.run or os.execve."""
+
+    file: str = ""
+    argv: list[str] = field(default_factory=list)
+    env: dict[str, str] = field(default_factory=dict)
+    check: bool = False
+
+
 def _make_registry() -> Registry:
     return Registry(
         schema_version=1,
@@ -45,6 +68,15 @@ def _make_registry() -> Registry:
             ),
             "local": ProfileEntry(directory="opencode_local"),
         },
+    )
+
+
+def _registry_for(exe: Path, directory: Path) -> Registry:
+    return Registry(
+        schema_version=1,
+        default_profile="default",
+        opencode_executable=str(exe),
+        profiles={"default": ProfileEntry(directory=str(directory))},
     )
 
 
@@ -273,3 +305,156 @@ class TestLaunchNativeDryRun:
         route = NativeRoute(argv=(), profile_name=None)
         assert launch_native(route, registry, dry_run=True) == 0
         assert not (process_harness.records_dir / "opencode.record.json").exists()
+
+
+class TestLaunchWindows:
+    """The win32 branch: supervised subprocess with returncode pass-through."""
+
+    def _install_fake_run(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        *,
+        returncode: int,
+        raise_keyboard: bool = False,
+    ) -> _RunCapture:
+        capture = _RunCapture()
+
+        def _fake_run(
+            argv: list[str],
+            *,
+            env: dict[str, str] | None = None,
+            check: bool = False,
+        ) -> _FakeCompleted:
+            capture.argv = list(argv)
+            capture.env = dict(env) if env is not None else {}
+            capture.check = check
+            if raise_keyboard:
+                raise KeyboardInterrupt
+            return _FakeCompleted(returncode=returncode)
+
+        monkeypatch.setattr(sys, "platform", "win32")
+        monkeypatch.setattr(
+            "oc_selector.process.subprocess",
+            SimpleNamespace(run=_fake_run),
+        )
+        return capture
+
+    def test_happy_win32_zero_returncode(
+        self,
+        isolated_home: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        fixture_executable: Callable[..., Path],
+    ) -> None:
+        """A win32 launch with returncode 0 returns 0 and forwards argv/env."""
+        exe = fixture_executable("opencode")
+        directory = isolated_home / "opencode"
+        directory.mkdir()
+        registry = _registry_for(exe, directory)
+        route = NativeRoute(argv=("run", "--flag", "value"), profile_name="default")
+        capture = self._install_fake_run(monkeypatch, returncode=0)
+        assert launch_native(route, registry) == 0
+        assert capture.argv == [str(exe), "run", "--flag", "value"]
+        assert capture.env["OPENCODE_CONFIG_DIR"] == str(directory)
+        assert capture.check is False
+
+    def test_happy_win32_nonzero_returncode_passthrough(
+        self,
+        isolated_home: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        fixture_executable: Callable[..., Path],
+    ) -> None:
+        """A win32 launch passes the native returncode through unchanged."""
+        exe = fixture_executable("opencode")
+        directory = isolated_home / "opencode"
+        directory.mkdir()
+        registry = _registry_for(exe, directory)
+        route = NativeRoute(argv=("run",), profile_name="default")
+        _ = self._install_fake_run(monkeypatch, returncode=3)
+        assert launch_native(route, registry) == 3
+
+    def test_happy_win32_keyboard_interrupt_returns_130(
+        self,
+        isolated_home: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        fixture_executable: Callable[..., Path],
+    ) -> None:
+        """A win32 launch interrupted by Ctrl+C returns 130."""
+        exe = fixture_executable("opencode")
+        directory = isolated_home / "opencode"
+        directory.mkdir()
+        registry = _registry_for(exe, directory)
+        route = NativeRoute(argv=(), profile_name="default")
+        _ = self._install_fake_run(monkeypatch, returncode=0, raise_keyboard=True)
+        assert launch_native(route, registry) == 130
+
+
+class TestLaunchPosix:
+    """The posix branch: os.execve replaces the calling process image."""
+
+    def test_happy_posix_execve_replaces_child(
+        self,
+        isolated_home: Path,
+        process_harness: ProcessHarness,
+        fixture_executable: Callable[..., Path],
+    ) -> None:
+        """A non-win32 launch execves the fixture executable in a child process."""
+        exe = fixture_executable("opencode", stdout="OCX-POSIX-MARKER\n")
+        directory = isolated_home / "opencode"
+        directory.mkdir()
+        script = f"""\
+import sys
+
+from oc_selector.process import launch_native
+from oc_selector.registry import ProfileEntry, Registry
+from oc_selector.routing import NativeRoute
+
+registry = Registry(
+    schema_version=1,
+    default_profile="default",
+    opencode_executable={str(exe)!r},
+    profiles={{"default": ProfileEntry(directory={str(directory)!r})}},
+)
+route = NativeRoute(argv=("some", "args"), profile_name="default")
+sys.exit(launch_native(route, registry))
+"""
+        repo_root = Path(__file__).resolve().parent.parent
+        completed = subprocess.run(
+            [sys.executable, "-c", script],
+            env=os.environ,
+            cwd=str(repo_root),
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert completed.returncode == 0
+        assert "OCX-POSIX-MARKER" in completed.stdout
+        record = process_harness.record_for("opencode")
+        assert record["argv"] == [str(exe), "some", "args"]
+
+    def test_failure_posix_execve_oserror_propagates(
+        self,
+        isolated_home: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        fixture_executable: Callable[..., Path],
+    ) -> None:
+        """A posix launch propagates the execve OSError after forwarding argv/env."""
+        exe = fixture_executable("opencode")
+        directory = isolated_home / "opencode"
+        directory.mkdir()
+        registry = _registry_for(exe, directory)
+        route = NativeRoute(argv=("some", "args"), profile_name="default")
+        capture = _RunCapture()
+
+        def _fake_execve(file: str, args: list[str], env: dict[str, str]) -> None:
+            capture.file = file
+            capture.argv = list(args)
+            capture.env = dict(env)
+            raise OSError("simulated execve failure")
+
+        monkeypatch.setattr("oc_selector.process.os.execve", _fake_execve)
+        with pytest.raises(OSError, match="simulated execve failure"):
+            launch_native(route, registry)
+        assert capture.file == str(exe)
+        assert capture.argv == [str(exe), "some", "args"]
+        assert capture.env["OPENCODE_CONFIG_DIR"] == str(directory)
