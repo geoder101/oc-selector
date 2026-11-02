@@ -107,23 +107,7 @@ def validate_profile_name(name: str) -> str:
         )
     if name in RESERVED_NAMES:
         raise RegistryError(f"Profile name {name!r} is reserved")
-    # Reject dot segments and path separators
-    if "." in name or "/" in name or "\\" in name:
-        raise RegistryError(f"Profile name contains invalid characters: {name!r}")
-    # Reject absolute paths
-    if name.startswith("/") or (len(name) > 1 and name[1] == ":"):
-        raise RegistryError(f"Profile name is an absolute path: {name!r}")
     return name
-
-
-def _check_casefold_collision(name: str, existing: set[str]) -> None:
-    """Check for casefold collision with existing names."""
-    cf = name.casefold()
-    for other in existing:
-        if other.casefold() == cf and other != name:
-            raise RegistryError(
-                f"Casefold collision: {name!r} conflicts with {other!r}",
-            )
 
 
 # --- Pydantic models ---
@@ -175,11 +159,8 @@ class Registry(BaseModel):
                 f"default_profile {self.default_profile!r} not in profiles",
             )
         # Validate names
-        seen: set[str] = set()
         for name in self.profiles:
             validate_profile_name(name)
-            _check_casefold_collision(name, seen)
-            seen.add(name)
         # Reject duplicate directory mappings
         dirs: dict[str, str] = {}
         for name, entry in self.profiles.items():
@@ -286,8 +267,7 @@ def registry_to_toml(reg: Registry) -> str:
         if entry.omo_profile is not None:
             ptable["omo_profile"] = entry.omo_profile
         profiles_table[name] = ptable
-    if profiles_table:
-        doc["profiles"] = profiles_table
+    doc["profiles"] = profiles_table
     return tomlkit.dumps(doc)
 
 

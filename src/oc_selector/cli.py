@@ -342,9 +342,6 @@ def sync(
         if target_name not in reg.profiles:
             _error_exit(f"Profile {target_name!r} not found", code=2)
         targets = [(target_name, reg.profiles[target_name])]
-    if not targets:
-        typer.echo("No profiles to sync.")
-        return
     failed = False
     for target_name, entry in targets:
         result = sync_host_package(
@@ -448,11 +445,11 @@ def main() -> None:
         decision = route(args, reg)
         if isinstance(decision, ManagementRoute):
             app(args=[decision.command, *decision.args], prog_name="oc-selector")
-            return
-        if reg is None:
-            _error_exit("No registry found. Run 'oc-selector init' first.", code=2)
-        resolve_executable(reg.opencode_executable)
-        launch_native(decision, reg)
+        else:
+            if reg is None:
+                _error_exit("No registry found. Run 'oc-selector init' first.", code=2)
+            resolve_executable(reg.opencode_executable)
+            launch_native(decision, reg)
     except OcSelectorError as exc:
         _error_exit(str(exc), code=2)
 

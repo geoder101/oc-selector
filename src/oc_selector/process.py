@@ -23,6 +23,7 @@ import stat
 import subprocess
 import sys
 from pathlib import Path
+from typing import NoReturn
 
 from oc_selector.errors import (
     ExecutableMissingError,
@@ -119,11 +120,10 @@ def launch_native(
 
     if sys.platform == "win32":
         return _launch_windows(argv, env)
-    _launch_posix(argv, env)
-    return 127
+    return _launch_posix(argv, env)
 
 
-def _launch_posix(argv: list[str], env: dict[str, str]) -> None:
+def _launch_posix(argv: list[str], env: dict[str, str]) -> NoReturn:
     """POSIX execve - replaces current process."""
     os.execve(argv[0], argv, env)  # noqa: S606
 

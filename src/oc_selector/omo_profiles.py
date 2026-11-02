@@ -111,11 +111,7 @@ def convert_legacy_to_native(  # noqa: C901, PLR0912
             agent_entry["models"] = models
         # Permission goes under harness key
         if "permission" in agent_fields:
-            harness_entry = harness_agents.get(agent_name)
-            if isinstance(harness_entry, dict):
-                harness_entry["permission"] = agent_fields["permission"]
-            else:
-                harness_agents[agent_name] = {"permission": agent_fields["permission"]}
+            harness_agents[agent_name] = {"permission": agent_fields["permission"]}
         # Unknown fields
         known = {"model", "fallback_models", "permission"}
         for k in agent_fields:
