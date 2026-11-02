@@ -20,7 +20,7 @@ import json
 import re
 import sys
 from pathlib import Path  # noqa: TC003
-from typing import Annotated, NoReturn, cast
+from typing import Annotated, NoReturn
 
 import typer
 from pydantic import TypeAdapter, ValidationError
@@ -55,6 +55,7 @@ _RELEASE_RE = re.compile(r"^1\.\d+\.\d+$")
 
 # Normalizes parsed JSON values to plain typed dicts at the OMO config boundary.
 _PLAIN_DICT_ADAPTER: TypeAdapter[dict[str, object]] = TypeAdapter(dict[str, object])
+_PROMPT_ADAPTER: TypeAdapter[str] = TypeAdapter(str)
 
 
 def _error_exit(message: str, code: int = 1) -> NoReturn:
@@ -165,7 +166,7 @@ def create(
     if directory is None:
         if no_interactive or not sys.stdin.isatty():
             _error_exit(f"Directory is required for profile {name!r}; pass it as an argument.", code=2)
-        raw = cast("str", typer.prompt(f"Directory for profile {name!r}"))
+        raw = _PROMPT_ADAPTER.validate_python(typer.prompt(f"Directory for profile {name!r}"))
         if not raw.strip():
             _error_exit("Directory cannot be empty.", code=2)
         directory = raw.strip()

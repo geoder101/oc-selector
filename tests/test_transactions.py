@@ -14,9 +14,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path  # noqa: TC003
-from typing import cast
 
 import pytest
+from pydantic import TypeAdapter
 
 from oc_selector.errors import MaintenanceError
 from oc_selector.transactions import (
@@ -28,6 +28,8 @@ from oc_selector.transactions import (
     journal_to_dict,
     read_journal,
 )
+
+_RESOURCES_ADAPTER: TypeAdapter[list[dict[str, object]]] = TypeAdapter(list[dict[str, object]])
 
 
 @pytest.fixture
@@ -114,7 +116,7 @@ class TestJournal:
         d = journal_to_dict(j)
         assert d["id"] == "test-id"
         assert d["phase"] == "prepared"
-        resources = cast("list[dict[str, object]]", d["resources"])
+        resources = _RESOURCES_ADAPTER.validate_python(d["resources"])
         assert resources[0]["path"] == "/tmp/test"
 
     def test_happy_read_missing_journal(self, tmp_path: Path) -> None:

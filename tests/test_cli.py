@@ -11,9 +11,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path  # noqa: TC003
-from typing import cast
 
 import pytest
+from pydantic import TypeAdapter
 from typer.testing import CliRunner
 
 from oc_selector import __version__
@@ -22,6 +22,9 @@ from oc_selector.paths import resolve_config_parent
 from oc_selector.registry import ProfileEntry, Registry, load_registry, registry_to_toml
 
 runner = CliRunner()
+
+_PAYLOAD_ADAPTER: TypeAdapter[dict[str, object]] = TypeAdapter(dict[str, object])
+_PROFILES_ADAPTER: TypeAdapter[list[dict[str, object]]] = TypeAdapter(list[dict[str, object]])
 
 
 @pytest.fixture
@@ -124,10 +127,10 @@ class TestListJson:
     def test_happy_list_json(self, setup_registry: Path) -> None:  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
         result = runner.invoke(app, ["list", "--json"])
         assert result.exit_code == 0
-        payload = cast("dict[str, object]", json.loads(result.output))
+        payload = _PAYLOAD_ADAPTER.validate_python(json.loads(result.output))
         assert payload["schema_version"] == 1
         assert payload["default_profile"] == "default"
-        profiles: list[dict[str, object]] = cast("list[dict[str, object]]", payload["profiles"])
+        profiles = _PROFILES_ADAPTER.validate_python(payload["profiles"])
         assert any(p["name"] == "default" for p in profiles)
 
 
@@ -140,7 +143,7 @@ class TestInfoCommand:
     def test_happy_info_json(self, setup_registry: Path) -> None:  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
         result = runner.invoke(app, ["info", "--json"])
         assert result.exit_code == 0
-        payload = cast("dict[str, object]", json.loads(result.output))
+        payload = _PAYLOAD_ADAPTER.validate_python(json.loads(result.output))
         assert payload["schema_version"] == 1
         assert "profiles" in payload
 

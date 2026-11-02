@@ -14,15 +14,17 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import cast
 
 import pytest
+from pydantic import TypeAdapter
 from typer.testing import CliRunner
 
 from oc_selector.cli import app
 from oc_selector.registry import ProfileEntry, Registry, load_registry, registry_to_toml
 
 runner = CliRunner()
+
+_OMO_ADAPTER: TypeAdapter[dict[str, object]] = TypeAdapter(dict[str, object])
 
 
 @pytest.fixture
@@ -228,7 +230,7 @@ class TestUpgradeOmo:
         r = runner.invoke(app, ["upgrade-omo", "omo", "--version", "2.0.0", "--dry-run"])
         assert r.exit_code == 0
         assert "would upgrade" in r.output
-        data = cast("dict[str, object]", json.loads((Path.home() / ".omo").read_text()))
+        data = _OMO_ADAPTER.validate_python(json.loads((Path.home() / ".omo").read_text()))
         assert data["version"] == "1.0.0"
 
     def test_happy_upgrade_writes(self, isolated_env: Path) -> None:
@@ -237,7 +239,7 @@ class TestUpgradeOmo:
         (isolated_env / "oc-selector" / "config.toml").write_text(registry_to_toml(self._registry_with_omo()))
         r = runner.invoke(app, ["upgrade-omo", "omo", "--version", "2.0.0"])
         assert r.exit_code == 0
-        data = cast("dict[str, object]", json.loads((Path.home() / ".omo").read_text()))
+        data = _OMO_ADAPTER.validate_python(json.loads((Path.home() / ".omo").read_text()))
         assert data["version"] == "2.0.0"
 
     def test_happy_upgrade_all_no_eligible(self, isolated_env: Path) -> None:  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]

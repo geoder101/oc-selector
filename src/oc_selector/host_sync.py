@@ -18,13 +18,29 @@ import json
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path  # noqa: TC003
-from typing import cast
+from typing import ClassVar
+
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from oc_selector.errors import (
     MaintenanceError,
     NetworkError,
 )
 from oc_selector.transactions import Transaction
+
+
+class PackageJson(BaseModel):
+    """Strict manifest model for the host ``package.json``.
+
+    Real manifests always carry keys beyond ``name``/``version``, so extra
+    keys are ignored; a non-object top level or a wrong-typed ``name``/
+    ``version`` fails validation and is treated as corruption (None).
+    """
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="ignore", frozen=True, strict=True, validate_default=True)
+
+    name: str = "unknown"
+    version: str = "0.0.0"
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,16 +80,14 @@ def detect_host_package(
     pkg_json = project_root / "package.json"
     if pkg_json.exists():
         try:
-            data = cast("dict[str, object]", json.loads(pkg_json.read_text()))
-            name = cast("str", data.get("name", "unknown"))
-            version = cast("str", data.get("version", "0.0.0"))
+            manifest = PackageJson.model_validate(json.loads(pkg_json.read_text()))
             return HostPackageInfo(
-                name=name,
-                version=version,
+                name=manifest.name,
+                version=manifest.version,
                 path=pkg_json,
                 package_manager="npm",
             )
-        except (json.JSONDecodeError, OSError):
+        except (json.JSONDecodeError, OSError, ValidationError):
             return None
 
     # Check for pyproject.toml (pip/uv)

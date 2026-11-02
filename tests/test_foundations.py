@@ -12,10 +12,11 @@ import os
 import sys
 import tomllib
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import pytest
 from helpers.process_harness import ProcessHarness
+from pydantic import TypeAdapter
 
 import oc_selector
 from oc_selector import cli, errors
@@ -27,6 +28,10 @@ if TYPE_CHECKING:
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
+_SCRIPTS_ADAPTER: TypeAdapter[dict[str, str]] = TypeAdapter(dict[str, str])
+_ERROR_CLASS_ADAPTER: TypeAdapter[type[errors.OcSelectorError]] = TypeAdapter(type[errors.OcSelectorError])
+_RECORD_ADAPTER: TypeAdapter[dict[str, object]] = TypeAdapter(dict[str, object])
+
 
 class TestPackaging:
     """Packaging metadata, import safety and versioning."""
@@ -36,7 +41,7 @@ class TestPackaging:
         pyproject = _PROJECT_ROOT / "pyproject.toml"
         with pyproject.open("rb") as handle:
             data = tomllib.load(handle)
-        scripts = cast("dict[str, str]", data["project"]["scripts"])
+        scripts = _SCRIPTS_ADAPTER.validate_python(data["project"]["scripts"])
         assert list(scripts) == ["oc-selector"]
         assert scripts["oc-selector"] == "oc_selector.cli:main"
 
@@ -86,7 +91,7 @@ class TestTypedErrors:
             "InterruptionError",
         )
         for name in names:
-            cls = cast("type[errors.OcSelectorError]", getattr(errors, name))
+            cls = _ERROR_CLASS_ADAPTER.validate_python(getattr(errors, name))
             assert issubclass(cls, errors.OcSelectorError)
             err = cls("msg")
             assert err.message == "msg"
@@ -177,7 +182,7 @@ class TestSubprocessHarness:
         assert result.exit_code == 3
         assert result.stderr == "boom\n"
         assert result.stdout == "partial\n"
-        recorded = cast("dict[str, object]", json.loads(result.record_path.read_text(encoding="utf-8")))
+        recorded = _RECORD_ADAPTER.validate_python(json.loads(result.record_path.read_text(encoding="utf-8")))
         assert recorded["exit_code"] == 3
         assert recorded["stderr"] == "boom\n"
 

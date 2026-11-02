@@ -12,9 +12,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path  # noqa: TC003
-from typing import cast
 
 import pytest
+from pydantic import TypeAdapter
 
 from oc_selector.errors import SchemaValidationError
 from oc_selector.omo_upgrade import (
@@ -23,6 +23,8 @@ from oc_selector.omo_upgrade import (
     run_omo_upgrade,
     validate_omo_config,
 )
+
+_CONFIG_ADAPTER: TypeAdapter[dict[str, object]] = TypeAdapter(dict[str, object])
 
 
 @pytest.fixture
@@ -92,7 +94,7 @@ class TestRunOmoUpgrade:
         result = run_omo_upgrade(valid_config, schema, state_root, new_config)
         assert result.success is True
         # Verify file was updated
-        data = cast("dict[str, object]", json.loads(valid_config.read_text()))
+        data = _CONFIG_ADAPTER.validate_python(json.loads(valid_config.read_text()))
         assert data["name"] == "updated-omo"
 
     def test_failure_invalid_new_config(

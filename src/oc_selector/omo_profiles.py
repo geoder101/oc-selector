@@ -23,9 +23,13 @@ Modern projection:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import cast
+
+from pydantic import TypeAdapter
 
 from oc_selector.errors import SchemaValidationError
+
+# Typed boundary for legacy ``fallback_models`` values narrowed to ``list``.
+_OBJECT_LIST_ADAPTER: TypeAdapter[list[object]] = TypeAdapter(list[object])
 
 # Core agent names that receive core overrides
 CORE_AGENT_NAMES: frozenset[str] = frozenset(
@@ -54,6 +58,27 @@ class ConversionResult:
     warnings: list[str] = field(default_factory=list)
 
 
+def _build_models_list(fields: dict[str, object]) -> list[object] | None:
+    """Build the native ``models`` list from legacy model/fallback fields.
+
+    Returns None when neither ``model`` nor ``fallback_models`` is present,
+    so the caller omits the ``models`` key entirely. An explicit
+    ``fallback_models: null`` is appended as ``None`` (legacy behavior).
+    """
+    if "model" not in fields and "fallback_models" not in fields:
+        return None
+    models: list[object] = []
+    if "model" in fields:
+        models.append(fields["model"])
+    if "fallback_models" in fields:
+        fallbacks = fields["fallback_models"]
+        if isinstance(fallbacks, list):
+            models.extend(_OBJECT_LIST_ADAPTER.validate_python(fallbacks))
+        else:
+            models.append(fallbacks)
+    return models
+
+
 def convert_legacy_to_native(  # noqa: C901, PLR0912
     owned_name: str,  # noqa: ARG001  # pyright: ignore[reportUnusedParameter]
     input_data: ConversionInput,
@@ -79,21 +104,16 @@ def convert_legacy_to_native(  # noqa: C901, PLR0912
     # Convert agents
     for agent_name, agent_fields in input_data.agents.items():
         agent_entry: dict[str, object] = {}
-        if "model" in agent_fields:
-            agent_entry["models"] = [agent_fields["model"]]
-        if "fallback_models" in agent_fields:
-            fallbacks = agent_fields["fallback_models"]
-            if isinstance(fallbacks, list):
-                cast("list[object]", agent_entry.setdefault("models", [])).extend(
-                    cast("list[object]", fallbacks),
-                )
-            else:
-                cast("list[object]", agent_entry.setdefault("models", [])).append(fallbacks)
+        models = _build_models_list(agent_fields)
+        if models is not None:
+            agent_entry["models"] = models
         # Permission goes under harness key
         if "permission" in agent_fields:
-            cast("dict[str, object]", harness_agents.setdefault(agent_name, {}))["permission"] = agent_fields[
-                "permission"
-            ]
+            harness_entry = harness_agents.get(agent_name)
+            if isinstance(harness_entry, dict):
+                harness_entry["permission"] = agent_fields["permission"]
+            else:
+                harness_agents[agent_name] = {"permission": agent_fields["permission"]}
         # Unknown fields
         known = {"model", "fallback_models", "permission"}
         for k in agent_fields:
@@ -107,16 +127,9 @@ def convert_legacy_to_native(  # noqa: C901, PLR0912
     # Convert categories
     for cat_name, cat_fields in input_data.categories.items():
         cat_entry: dict[str, object] = {}
-        if "model" in cat_fields:
-            cat_entry["models"] = [cat_fields["model"]]
-        if "fallback_models" in cat_fields:
-            fallbacks = cat_fields["fallback_models"]
-            if isinstance(fallbacks, list):
-                cast("list[object]", cat_entry.setdefault("models", [])).extend(
-                    cast("list[object]", fallbacks),
-                )
-            else:
-                cast("list[object]", cat_entry.setdefault("models", [])).append(fallbacks)
+        models = _build_models_list(cat_fields)
+        if models is not None:
+            cat_entry["models"] = models
         known = {"model", "fallback_models"}
         for k in cat_fields:
             if k not in known:

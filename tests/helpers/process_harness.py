@@ -27,10 +27,14 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Self, cast
+from typing import TYPE_CHECKING, Self
+
+from pydantic import TypeAdapter
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+_RECORD_ADAPTER: TypeAdapter[dict[str, object]] = TypeAdapter(dict[str, object])
 
 # Dead loopback endpoint (port 9 / "discard"); nothing listens, so any HTTP client
 # that honors proxy env vars fails fast on loopback instead of reaching the network.
@@ -255,4 +259,4 @@ class ProcessHarness:
 
         """
         record_path = self.records_dir / f"{name}.record.json"
-        return cast("dict[str, object]", json.loads(record_path.read_text(encoding="utf-8")))
+        return _RECORD_ADAPTER.validate_python(json.loads(record_path.read_text(encoding="utf-8")))

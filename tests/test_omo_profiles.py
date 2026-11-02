@@ -12,9 +12,8 @@ Covers:
 
 from __future__ import annotations
 
-from typing import cast
-
 import pytest
+from pydantic import TypeAdapter
 
 from oc_selector.errors import SchemaValidationError
 from oc_selector.omo_profiles import (
@@ -25,6 +24,10 @@ from oc_selector.omo_profiles import (
     validate_model_id,
 )
 
+_MODEL_MAP_ADAPTER: TypeAdapter[dict[str, dict[str, list[str]]]] = TypeAdapter(dict[str, dict[str, list[str]]])
+_PERMISSION_MAP_ADAPTER: TypeAdapter[dict[str, dict[str, str]]] = TypeAdapter(dict[str, dict[str, str]])
+_OBJECT_MAP_ADAPTER: TypeAdapter[dict[str, object]] = TypeAdapter(dict[str, object])
+
 
 class TestLegacyConversion:
     def test_happy_agent_model(self) -> None:
@@ -33,7 +36,7 @@ class TestLegacyConversion:
         )
         result = convert_legacy_to_native("oc-selector-test", inp)
         assert "agents" in result.profiles_entry
-        agents = cast("dict[str, dict[str, list[str]]]", result.profiles_entry["agents"])
+        agents = _MODEL_MAP_ADAPTER.validate_python(result.profiles_entry["agents"])
         assert agents["build"]["models"] == ["test/provider/model-a"]
 
     def test_happy_agent_with_fallbacks(self) -> None:
@@ -41,7 +44,7 @@ class TestLegacyConversion:
             agents={"build": {"model": "p/m1", "fallback_models": ["p/m2", "p/m3"]}},
         )
         result = convert_legacy_to_native("oc-selector-test", inp)
-        agents = cast("dict[str, dict[str, list[str]]]", result.profiles_entry["agents"])
+        agents = _MODEL_MAP_ADAPTER.validate_python(result.profiles_entry["agents"])
         assert agents["build"]["models"] == ["p/m1", "p/m2", "p/m3"]
 
     def test_happy_category_model(self) -> None:
@@ -49,7 +52,7 @@ class TestLegacyConversion:
             categories={"quick": {"model": "test/provider/quick"}},
         )
         result = convert_legacy_to_native("oc-selector-test", inp)
-        categories = cast("dict[str, dict[str, list[str]]]", result.profiles_entry["categories"])
+        categories = _MODEL_MAP_ADAPTER.validate_python(result.profiles_entry["categories"])
         assert categories["quick"]["models"] == ["test/provider/quick"]
 
     def test_happy_disabled_hooks(self) -> None:
@@ -63,7 +66,7 @@ class TestLegacyConversion:
         )
         result = convert_legacy_to_native("oc-selector-test", inp)
         assert HARNESS_KEY == "[opencode]"
-        harness_agents = cast("dict[str, dict[str, str]]", result.harness_entry["agents"])
+        harness_agents = _PERMISSION_MAP_ADAPTER.validate_python(result.harness_entry["agents"])
         assert harness_agents["explore"]["permission"] == "allow"
 
     def test_happy_multiple_agents(self) -> None:
@@ -75,7 +78,7 @@ class TestLegacyConversion:
             },
         )
         result = convert_legacy_to_native("oc-selector-test", inp)
-        assert len(cast("dict[str, object]", result.profiles_entry["agents"])) == 3
+        assert len(_OBJECT_MAP_ADAPTER.validate_python(result.profiles_entry["agents"])) == 3
 
     def test_failure_unknown_agent_field(self) -> None:
         inp = ConversionInput(
@@ -102,7 +105,7 @@ class TestModernProjection:
             "oc-selector-test",
             agents={"build": ["p/m1", "p/m2"]},
         )
-        agents = cast("dict[str, dict[str, list[str]]]", entry["agents"])
+        agents = _MODEL_MAP_ADAPTER.validate_python(entry["agents"])
         assert agents["build"]["models"] == ["p/m1", "p/m2"]
 
     def test_happy_build_entry_with_categories(self) -> None:
@@ -110,7 +113,7 @@ class TestModernProjection:
             "oc-selector-test",
             categories={"quick": ["p/q"]},
         )
-        categories = cast("dict[str, dict[str, list[str]]]", entry["categories"])
+        categories = _MODEL_MAP_ADAPTER.validate_python(entry["categories"])
         assert categories["quick"]["models"] == ["p/q"]
 
     def test_happy_empty_entry(self) -> None:

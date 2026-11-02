@@ -11,7 +11,7 @@ Contract:
 
 from __future__ import annotations
 
-from typing import cast
+from typing import ClassVar
 
 from json5 import dumper, loader
 from json5.model import (
@@ -19,8 +19,24 @@ from json5.model import (
     JSONText,
     Node,
 )
+from pydantic import BaseModel, ConfigDict, TypeAdapter
 
 from oc_selector.errors import SchemaValidationError
+
+
+class _JsonTextWrapper(BaseModel):
+    """Arbitrary-type wrapper validating a json-five node by identity.
+
+    ``JSONText`` has no Pydantic core schema, so the loader result is
+    validated through this wrapper (an ``isinstance`` check under the hood).
+    """
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(arbitrary_types_allowed=True)
+
+    value: JSONText
+
+
+_PLAIN_DICT_ADAPTER: TypeAdapter[dict[str, object]] = TypeAdapter(dict[str, object])
 
 
 class JsoncAdapter:
@@ -33,9 +49,10 @@ class JsoncAdapter:
         """
         try:
             ml = loader.ModelLoader()
-            return cast("JSONText", loader.loads(text, loader=ml))
+            wrapped = _JsonTextWrapper.model_validate({"value": loader.loads(text, loader=ml)})
         except Exception as e:
             raise SchemaValidationError(f"JSONC parse failed: {e}") from e
+        return wrapped.value
 
     def dump(self, model: JSONText, indent: int = 4) -> str:
         """Serialize a json-five model back to JSONC text."""
@@ -91,4 +108,4 @@ class JsoncAdapter:
     def to_plain(self, model: JSONText) -> dict[str, object]:
         """Convert model to plain Python dict (loses comments)."""
         ml = loader.DefaultLoader()
-        return cast("dict[str, object]", loader.loads(self.dump(model), loader=ml))
+        return _PLAIN_DICT_ADAPTER.validate_python(loader.loads(self.dump(model), loader=ml))

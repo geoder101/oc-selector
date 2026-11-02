@@ -1,4 +1,4 @@
-"""Cross-platform stdlib evidence runner for oc-selector verification.
+"""Cross-platform evidence runner for oc-selector verification.
 
 Usage::
 
@@ -22,7 +22,19 @@ import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import cast
+
+from pydantic import BaseModel
+
+
+class _CliArgs(BaseModel):
+    """Typed view over the parsed argparse options.
+
+    ``argparse.Namespace`` attributes are untyped, so the parsed namespace is
+    validated through this model to obtain a typed boundary.
+    """
+
+    evidence: str
+    expect_exit: int | None = None
 
 # Built-in fixture secret canaries that must never appear in evidence.
 _BUILTIN_SECRETS = (
@@ -82,9 +94,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Evidence runner for oc-selector.")
     parser.add_argument("--evidence", required=True, help="Path to write the evidence file.")
     parser.add_argument("--expect-exit", type=int, default=None, help="Expected child exit code.")
-    args = parser.parse_args(opts)
-    evidence_path = Path(cast("str", args.evidence))
-    expect_exit = cast("int | None", args.expect_exit)
+    ns = parser.parse_args(opts)
+    args = _CliArgs.model_validate(vars(ns))
+    evidence_path = Path(args.evidence)
+    expect_exit = args.expect_exit
 
     if not command:
         sys.stderr.write("error: no command supplied after '--'\n")
