@@ -16,4 +16,7 @@ registry file format, the exit codes, and a glossary of terms.
 The generated :doc:`api/oc_selector/index` page documents the internal
 ``oc_selector`` modules. It is **not** a supported public API — the only
 supported interface is the ``oc-selector`` command-line tool (see the note on
-the :doc:`index` landing page).
+the :doc:`index` landing page). The ``py.typed`` marker shipped in the package
+only ships type information; it does **not** make the internal modules a stable
+public API — the only supported interface remains the ``oc-selector``
+command-line tool.
