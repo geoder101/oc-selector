@@ -13,6 +13,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from oc_selector.errors import ArgumentError, RegistryError
 from oc_selector.paths import (
@@ -26,6 +27,7 @@ from oc_selector.registry import (
     NATIVE_NAMES,
     ProfileEntry,
     Registry,
+    load_registry,
     parse_registry,
     registry_to_toml,
     validate_profile_name,
@@ -33,6 +35,7 @@ from oc_selector.registry import (
 from oc_selector.routing import (
     ManagementRoute,
     NativeRoute,
+    is_reserved_name,
     route,
     validate_management_args,
 )
@@ -219,6 +222,111 @@ class TestRegistryRoundtrip:
         output = registry_to_toml(reg)
         reg2 = parse_registry(output)
         assert reg2.profiles["default"].model == "openai/gpt-4"
+
+
+# --- Registry model validation tests ---
+
+
+class TestRegistryModelValidation:
+    def test_happy_omo_profile_survives_model_dump(self) -> None:
+        """omo_profile is preserved through ProfileEntry.model_dump()."""
+        entry = ProfileEntry(directory="opencode", omo_profile="x")
+        dumped = entry.model_dump()
+        assert dumped["omo_profile"] == "x"
+
+    def test_failure_schema_version_two_rejected(self) -> None:
+        """schema_version != 1 raises a pydantic ValidationError."""
+        with pytest.raises(ValidationError, match="schema_version"):
+            Registry(
+                schema_version=2,
+                default_profile="default",
+                profiles={"default": ProfileEntry(directory="opencode")},
+            )
+
+    def test_failure_empty_profiles_rejected(self) -> None:
+        """A registry with zero profiles is rejected."""
+        with pytest.raises(ValidationError, match="at least one profile"):
+            Registry(default_profile="a", profiles={})
+
+    def test_failure_executable_with_space_rejected(self) -> None:
+        """A non-absolute executable containing a space is rejected."""
+        with pytest.raises(ValidationError, match="opencode_executable"):
+            Registry(
+                default_profile="default",
+                opencode_executable="my opencode",
+                profiles={"default": ProfileEntry(directory="opencode")},
+            )
+
+
+# --- Registry TOML parse error tests ---
+
+
+class TestRegistryParseErrors:
+    def test_failure_schema_version_array_rejected(self) -> None:
+        """A TOML array schema_version is rejected by _coerce_schema_version."""
+        data = """\
+schema_version = [1]
+default_profile = "default"
+
+[profiles.default]
+directory = "opencode"
+"""
+        with pytest.raises(RegistryError, match="Unsupported schema_version"):
+            parse_registry(data)
+
+    def test_failure_profiles_not_a_table(self) -> None:
+        """A scalar profiles value is rejected."""
+        data = """\
+default_profile = "default"
+profiles = "not-a-table"
+"""
+        with pytest.raises(RegistryError, match="must be a table"):
+            parse_registry(data)
+
+    def test_failure_profile_entry_not_a_table(self) -> None:
+        """A scalar entry under [profiles] is rejected."""
+        data = """\
+default_profile = "work"
+
+[profiles]
+work = "x"
+"""
+        with pytest.raises(RegistryError, match="is not a table"):
+            parse_registry(data)
+
+    def test_failure_unknown_profile_key(self) -> None:
+        """An unknown key inside a profile table is rejected."""
+        data = """\
+default_profile = "default"
+
+[profiles.default]
+directory = "opencode"
+unknown_key = "v"
+"""
+        with pytest.raises(RegistryError, match="Unknown profile key"):
+            parse_registry(data)
+
+    def test_failure_profile_missing_directory(self) -> None:
+        """A profile table without a directory is rejected."""
+        data = """\
+default_profile = "default"
+
+[profiles.default]
+model = "openai/gpt-4"
+"""
+        with pytest.raises(RegistryError, match="missing required 'directory'"):
+            parse_registry(data)
+
+
+# --- Registry load tests ---
+
+
+class TestLoadRegistry:
+    def test_failure_missing_file(self, isolated_home: Path) -> None:
+        """load_registry raises RegistryError for a missing path."""
+        path = isolated_home / "missing" / "config.toml"
+        with pytest.raises(RegistryError, match="Registry not found"):
+            load_registry(path)
 
 
 # --- Routing tests ---
@@ -413,3 +521,19 @@ class TestManagementGrammar:
     def test_failure_create_too_many_positionals(self) -> None:
         with pytest.raises(ArgumentError, match="Too many"):
             validate_management_args("create", ("a", "b", "c"))
+
+    def test_failure_unknown_command(self) -> None:
+        with pytest.raises(ArgumentError, match="Unknown management command"):
+            validate_management_args("bogus", ())
+
+    def test_failure_alias_empty_value(self) -> None:
+        with pytest.raises(ArgumentError, match="requires a non-empty value"):
+            validate_management_args("completion", ("bash", "--alias", ""))
+
+
+class TestReservedNames:
+    def test_happy_device_name_is_reserved(self) -> None:
+        assert is_reserved_name("con") is True
+
+    def test_happy_profile_name_not_reserved(self) -> None:
+        assert is_reserved_name("work") is False
