@@ -126,3 +126,36 @@ class TestSetValue:
         assert '"new/model"' in output
         # Comments preserved
         assert "// Main config" in output
+
+    def test_failure_set_value_no_args(self, adapter: JsoncAdapter) -> None:
+        """set_value with no arguments raises a schema validation error."""
+        model = adapter.load('{"a": 1}')
+        with pytest.raises(SchemaValidationError, match="at least key and value"):
+            adapter.set_value(model)
+
+    def test_failure_set_value_single_arg(self, adapter: JsoncAdapter) -> None:
+        """set_value with only a key and no value raises a schema validation error."""
+        model = adapter.load('{"a": 1}')
+        with pytest.raises(SchemaValidationError, match="at least key and value"):
+            adapter.set_value(model, "onlykey")
+
+    def test_failure_set_value_no_raw_value(self, adapter: JsoncAdapter) -> None:
+        """set_value on a boolean target (no raw_value) raises a schema error."""
+        model = adapter.load('{"a": true}')
+        with pytest.raises(SchemaValidationError, match="does not support raw_value"):
+            adapter.set_value(model, "a", '"x"')
+
+    def test_happy_set_value_integer_target(self, adapter: JsoncAdapter) -> None:
+        """set_value on an integer target updates raw_value and value."""
+        model = adapter.load('{"a": 1}')
+        adapter.set_value(model, "a", '"new"')
+        output = adapter.dump(model)
+        assert output == '{"a": "new"}'
+
+
+class TestToPlain:
+    def test_happy_to_plain_nested(self, adapter: JsoncAdapter) -> None:
+        """to_plain converts a model to a plain dict with nested values."""
+        model = adapter.load('{"a": 1, "b": {"c": "x"}}')
+        plain = adapter.to_plain(model)
+        assert plain == {"a": 1, "b": {"c": "x"}}
