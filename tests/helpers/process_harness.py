@@ -199,7 +199,10 @@ class ProcessHarness:
         py_path = self.bin_dir / f"{name}.py"
         _ = py_path.write_text(body, encoding="utf-8")
         bat_path = self.bin_dir / f"{name}.bat"
-        _ = bat_path.write_text(f'@echo off\r\n"{sys.executable}" "{py_path}" %*\r\n', encoding="utf-8")
+        _ = bat_path.write_text(
+            f'@echo off\r\n"{sys.executable}" "{py_path}" %*\r\n',
+            encoding="utf-8",
+        )
         return bat_path
 
     def run(
@@ -244,7 +247,10 @@ class ProcessHarness:
             exit_code=completed.returncode,
             record_path=record_path,
         )
-        _ = record_path.write_text(json.dumps(result.to_dict(), indent=2) + "\n", encoding="utf-8")
+        _ = record_path.write_text(
+            json.dumps(result.to_dict(), indent=2) + "\n",
+            encoding="utf-8",
+        )
         self._results.append(result)
         return result
 
@@ -259,4 +265,6 @@ class ProcessHarness:
 
         """
         record_path = self.records_dir / f"{name}.record.json"
-        return _RECORD_ADAPTER.validate_python(json.loads(record_path.read_text(encoding="utf-8")))
+        return _RECORD_ADAPTER.validate_python(
+            json.loads(record_path.read_text(encoding="utf-8")),
+        )

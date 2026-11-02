@@ -24,8 +24,12 @@ from oc_selector.omo_profiles import (
     validate_model_id,
 )
 
-_MODEL_MAP_ADAPTER: TypeAdapter[dict[str, dict[str, list[str]]]] = TypeAdapter(dict[str, dict[str, list[str]]])
-_PERMISSION_MAP_ADAPTER: TypeAdapter[dict[str, dict[str, str]]] = TypeAdapter(dict[str, dict[str, str]])
+_MODEL_MAP_ADAPTER: TypeAdapter[dict[str, dict[str, list[str]]]] = TypeAdapter(
+    dict[str, dict[str, list[str]]],
+)
+_PERMISSION_MAP_ADAPTER: TypeAdapter[dict[str, dict[str, str]]] = TypeAdapter(
+    dict[str, dict[str, str]],
+)
 _OBJECT_MAP_ADAPTER: TypeAdapter[dict[str, object]] = TypeAdapter(dict[str, object])
 
 
@@ -52,7 +56,9 @@ class TestLegacyConversion:
             categories={"quick": {"model": "test/provider/quick"}},
         )
         result = convert_legacy_to_native("oc-selector-test", inp)
-        categories = _MODEL_MAP_ADAPTER.validate_python(result.profiles_entry["categories"])
+        categories = _MODEL_MAP_ADAPTER.validate_python(
+            result.profiles_entry["categories"],
+        )
         assert categories["quick"]["models"] == ["test/provider/quick"]
 
     def test_happy_disabled_hooks(self) -> None:
@@ -66,7 +72,9 @@ class TestLegacyConversion:
         )
         result = convert_legacy_to_native("oc-selector-test", inp)
         assert HARNESS_KEY == "[opencode]"
-        harness_agents = _PERMISSION_MAP_ADAPTER.validate_python(result.harness_entry["agents"])
+        harness_agents = _PERMISSION_MAP_ADAPTER.validate_python(
+            result.harness_entry["agents"],
+        )
         assert harness_agents["explore"]["permission"] == "allow"
 
     def test_happy_multiple_agents(self) -> None:
@@ -78,7 +86,10 @@ class TestLegacyConversion:
             },
         )
         result = convert_legacy_to_native("oc-selector-test", inp)
-        assert len(_OBJECT_MAP_ADAPTER.validate_python(result.profiles_entry["agents"])) == 3
+        assert (
+            len(_OBJECT_MAP_ADAPTER.validate_python(result.profiles_entry["agents"]))
+            == 3
+        )
 
     def test_failure_unknown_agent_field(self) -> None:
         inp = ConversionInput(

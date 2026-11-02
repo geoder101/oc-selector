@@ -73,7 +73,9 @@ def run_init(
     no_backup: bool = False,  # noqa: ARG001  # pyright: ignore[reportUnusedParameter]
     dry_run: bool = False,
 ) -> InitResult:
-    """Run generic init: detect existing config, create missing parent, create empty registry.
+    """Run generic init.
+
+    Detect existing config, create missing parent, create empty registry.
 
     Never calls conversion.
 

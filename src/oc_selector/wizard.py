@@ -244,14 +244,19 @@ def run_edit_wizard(
         return WizardResult(
             success=True,
             profile_name=inp.name,
-            message=f"Dry run: would edit profile {inp.name!r} -> directory={new_dir}, model={new_model}",
+            message=(
+                f"Dry run: would edit profile {inp.name!r} -> directory={new_dir}, "
+                f"model={new_model}"
+            ),
         )
 
     # Build updated entry
     new_entry = ProfileEntry(
         directory=inp.directory if inp.directory is not None else existing.directory,
         model=inp.model if inp.model is not None else existing.model,
-        omo_profile=inp.omo_profile if inp.omo_profile is not None else existing.omo_profile,
+        omo_profile=inp.omo_profile
+        if inp.omo_profile is not None
+        else existing.omo_profile,
     )
 
     # Use transaction for mutation

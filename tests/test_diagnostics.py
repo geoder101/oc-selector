@@ -149,7 +149,10 @@ class TestRegistryHandling:
             default_profile="gpt",
             profiles={
                 "default": ProfileEntry(directory="opencode"),
-                "gpt": ProfileEntry(directory="opencode_gpt", omo_profile="oc-selector-gpt"),
+                "gpt": ProfileEntry(
+                    directory="opencode_gpt",
+                    omo_profile="oc-selector-gpt",
+                ),
             },
         )
         result = collect_diagnostics(reg, version_probe=_fake_probe_ok())

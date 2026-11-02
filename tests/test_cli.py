@@ -24,7 +24,9 @@ from oc_selector.registry import ProfileEntry, Registry, load_registry, registry
 runner = CliRunner()
 
 _PAYLOAD_ADAPTER: TypeAdapter[dict[str, object]] = TypeAdapter(dict[str, object])
-_PROFILES_ADAPTER: TypeAdapter[list[dict[str, object]]] = TypeAdapter(list[dict[str, object]])
+_PROFILES_ADAPTER: TypeAdapter[list[dict[str, object]]] = TypeAdapter(
+    list[dict[str, object]],
+)
 
 
 @pytest.fixture
@@ -62,7 +64,11 @@ class TestListCommand:
         assert result.exit_code == 0
         assert "default" in result.output
 
-    def test_failure_no_registry(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_failure_no_registry(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "nonexistent"))
         monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
 
@@ -169,7 +175,11 @@ class TestCompletionAlias:
 
 
 class TestInitFlags:
-    def test_happy_init_dry_run(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_happy_init_dry_run(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
         monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
         result = runner.invoke(app, ["init", "--dry-run"])
@@ -191,7 +201,10 @@ class TestCreateFlags:
         assert "newprof" not in load_registry(setup_registry).profiles
 
     def test_happy_create_persists_model(self, setup_registry: Path) -> None:
-        result = runner.invoke(app, ["create", "withmodel", "wm-dir", "--model", "openai/gpt"])
+        result = runner.invoke(
+            app,
+            ["create", "withmodel", "wm-dir", "--model", "openai/gpt"],
+        )
         assert result.exit_code == 0
         assert load_registry(setup_registry).profiles["withmodel"].model == "openai/gpt"
 
@@ -204,7 +217,10 @@ class TestCreateFlags:
 class TestEditFlags:
     def test_happy_edit_dry_run(self, setup_registry: Path) -> None:
         runner.invoke(app, ["create", "editable", "ed-dir"])
-        result = runner.invoke(app, ["edit", "editable", "--directory", "ed-dir2", "--dry-run"])
+        result = runner.invoke(
+            app,
+            ["edit", "editable", "--directory", "ed-dir2", "--dry-run"],
+        )
         assert result.exit_code == 0
         assert "would edit" in result.output
         assert load_registry(setup_registry).profiles["editable"].directory == "ed-dir"
@@ -213,7 +229,10 @@ class TestEditFlags:
         runner.invoke(app, ["create", "editable", "ed-dir"])
         result = runner.invoke(app, ["edit", "editable", "--model", "anthropic/claude"])
         assert result.exit_code == 0
-        assert load_registry(setup_registry).profiles["editable"].model == "anthropic/claude"
+        assert (
+            load_registry(setup_registry).profiles["editable"].model
+            == "anthropic/claude"
+        )
 
 
 class TestSetDefaultFlags:
@@ -229,7 +248,9 @@ class TestSyncCommand:
     def test_happy_sync_dry_run(self, setup_registry: Path) -> None:  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
         prof_dir = resolve_config_parent() / "default"
         prof_dir.mkdir(parents=True, exist_ok=True)
-        (prof_dir / "package.json").write_text('{"name": "test-pkg", "version": "1.0.0"}')
+        (prof_dir / "package.json").write_text(
+            '{"name": "test-pkg", "version": "1.0.0"}',
+        )
         result = runner.invoke(app, ["sync", "default", "--dry-run"])
         assert result.exit_code == 0
         assert "would sync" in result.output

@@ -53,7 +53,10 @@ class TestPaths:
         parent = resolve_config_parent()
         assert parent == Path.home() / ".config"
 
-    def test_failure_relative_xdg_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_failure_relative_xdg_rejected(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         monkeypatch.setenv("XDG_CONFIG_HOME", "relative/path")
         with pytest.raises(RegistryError, match="relative"):
             resolve_config_parent()
@@ -137,7 +140,15 @@ directory = 'opencode'
 
 class TestProfileNames:
     def test_happy_valid_names(self) -> None:
-        for name in ["default", "gpt", "local", "standard", "my-profile", "a", "abc123"]:
+        for name in [
+            "default",
+            "gpt",
+            "local",
+            "standard",
+            "my-profile",
+            "a",
+            "abc123",
+        ]:
             assert validate_profile_name(name) == name
 
     def test_failure_reserved_management(self) -> None:
@@ -201,7 +212,9 @@ class TestRegistryRoundtrip:
             schema_version=1,
             default_profile="default",
             opencode_executable="opencode",
-            profiles={"default": ProfileEntry(directory="opencode", model="openai/gpt-4")},
+            profiles={
+                "default": ProfileEntry(directory="opencode", model="openai/gpt-4"),
+            },
         )
         output = registry_to_toml(reg)
         reg2 = parse_registry(output)
@@ -218,7 +231,10 @@ def _make_registry() -> Registry:
         opencode_executable="opencode",
         profiles={
             "default": ProfileEntry(directory="opencode"),
-            "gpt": ProfileEntry(directory="opencode_gpt", omo_profile="oc-selector-gpt"),
+            "gpt": ProfileEntry(
+                directory="opencode_gpt",
+                omo_profile="oc-selector-gpt",
+            ),
             "local": ProfileEntry(directory="opencode_local"),
         },
     )
@@ -365,7 +381,10 @@ class TestManagementGrammar:
             validate_management_args("upgrade-omo", ("--version",))
 
     def test_happy_create_dir_and_model(self) -> None:
-        validate_management_args("create", ("myprofile", "mydir", "--model", "openai/gpt"))
+        validate_management_args(
+            "create",
+            ("myprofile", "mydir", "--model", "openai/gpt"),
+        )
 
     def test_happy_edit_directory_and_model(self) -> None:
         validate_management_args(

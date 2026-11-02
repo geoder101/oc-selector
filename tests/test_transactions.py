@@ -29,7 +29,9 @@ from oc_selector.transactions import (
     read_journal,
 )
 
-_RESOURCES_ADAPTER: TypeAdapter[list[dict[str, object]]] = TypeAdapter(list[dict[str, object]])
+_RESOURCES_ADAPTER: TypeAdapter[list[dict[str, object]]] = TypeAdapter(
+    list[dict[str, object]],
+)
 
 
 @pytest.fixture
@@ -49,7 +51,11 @@ class TestTransactionLifecycle:
         assert journal_path.exists()
         tx.close()
 
-    def test_happy_commit_transitions_phases(self, state_root: Path, tmp_path: Path) -> None:
+    def test_happy_commit_transitions_phases(
+        self,
+        state_root: Path,
+        tmp_path: Path,
+    ) -> None:
         tx = Transaction(state_root, operation="test")
         tx.begin()
         # Stage a file
@@ -76,7 +82,11 @@ class TestTransactionLifecycle:
         # File should still have original content (rollback before commit)
         assert dst.read_text() == "original"
 
-    def test_happy_lock_released_after_commit(self, state_root: Path, tmp_path: Path) -> None:
+    def test_happy_lock_released_after_commit(
+        self,
+        state_root: Path,
+        tmp_path: Path,
+    ) -> None:
         tx = Transaction(state_root, operation="test")
         tx.begin()
         src = tmp_path / "s.txt"
@@ -126,7 +136,8 @@ class TestJournal:
     def test_golden_journal_bytes_exact_key_order(self, state_root: Path) -> None:
         """Golden write-side shape: raw journal file bytes pin the exact key order.
 
-        Journal keys: id, operation, phase, resources, affected_profiles, pid, host, timestamp.
+        Journal keys: id, operation, phase, resources, affected_profiles, pid,
+        host, timestamp.
         Resource keys: path, preimage_hash, postimage_hash, existed, mode.
         ``phase`` is serialized as its ``.value`` string.
         """

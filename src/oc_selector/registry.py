@@ -21,7 +21,14 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 import tomlkit
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_serializer, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    TypeAdapter,
+    field_serializer,
+    model_validator,
+)
 
 from oc_selector.errors import RegistryError
 
@@ -48,7 +55,8 @@ MANAGEMENT_NAMES: frozenset[str] = frozenset(
     },
 )
 
-# Native safe superset - union with the pinned actual command names from the upstream fixture
+# Native safe superset - union with the pinned actual command names from the
+# upstream fixture
 NATIVE_NAMES: frozenset[str] = frozenset(
     {
         "completion",
@@ -94,7 +102,9 @@ RESERVED_NAMES: frozenset[str] = MANAGEMENT_NAMES | NATIVE_NAMES | _DEVICE_NAMES
 def validate_profile_name(name: str) -> str:
     """Validate a profile name against the naming rules. Returns the name if valid."""
     if not _NAME_RE.fullmatch(name):
-        raise RegistryError(f"Invalid profile name: {name!r} (must match [a-z][a-z0-9-]{{0,47}})")
+        raise RegistryError(
+            f"Invalid profile name: {name!r} (must match [a-z][a-z0-9-]{{0,47}})",
+        )
     if name in RESERVED_NAMES:
         raise RegistryError(f"Profile name {name!r} is reserved")
     # Reject dot segments and path separators
@@ -111,7 +121,9 @@ def _check_casefold_collision(name: str, existing: set[str]) -> None:
     cf = name.casefold()
     for other in existing:
         if other.casefold() == cf and other != name:
-            raise RegistryError(f"Casefold collision: {name!r} conflicts with {other!r}")
+            raise RegistryError(
+                f"Casefold collision: {name!r} conflicts with {other!r}",
+            )
 
 
 # --- Pydantic models ---
@@ -120,7 +132,12 @@ def _check_casefold_collision(name: str, existing: set[str]) -> None:
 class ProfileEntry(BaseModel):
     """A single profile entry in the registry."""
 
-    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid", frozen=True, strict=True, validate_default=True)
+    model_config: ClassVar[ConfigDict] = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        strict=True,
+        validate_default=True,
+    )
 
     directory: str = Field(min_length=1)
     model: str | None = None
@@ -134,7 +151,12 @@ class ProfileEntry(BaseModel):
 class Registry(BaseModel):
     """The full oc-selector registry (config.toml)."""
 
-    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid", frozen=True, strict=True, validate_default=True)
+    model_config: ClassVar[ConfigDict] = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        strict=True,
+        validate_default=True,
+    )
 
     schema_version: int = Field(default=1)
     default_profile: str
@@ -149,7 +171,9 @@ class Registry(BaseModel):
             raise ValueError("Registry must have at least one profile")
         # Default must exist
         if self.default_profile not in self.profiles:
-            raise ValueError(f"default_profile {self.default_profile!r} not in profiles")
+            raise ValueError(
+                f"default_profile {self.default_profile!r} not in profiles",
+            )
         # Validate names
         seen: set[str] = set()
         for name in self.profiles:
@@ -160,14 +184,18 @@ class Registry(BaseModel):
         dirs: dict[str, str] = {}
         for name, entry in self.profiles.items():
             if entry.directory in dirs:
+                path = entry.directory
+                prev = dirs[path]
                 raise ValueError(
-                    f"Duplicate directory {entry.directory!r} for profiles {dirs[entry.directory]!r} and {name!r}",
+                    f"Duplicate directory {path!r} for profiles {prev!r} and {name!r}",
                 )
             dirs[entry.directory] = name
         # Executable must be a command name or absolute path, not a shell string
         exe = self.opencode_executable
         if " " in exe and not exe.startswith("/"):
-            raise ValueError(f"opencode_executable must be a command or absolute path: {exe!r}")
+            raise ValueError(
+                f"opencode_executable must be a command or absolute path: {exe!r}",
+            )
         return self
 
 
@@ -197,7 +225,12 @@ def _doc_to_registry(doc: tomlkit.TOMLDocument) -> Registry:
     """Convert a tomlkit document to a validated Registry."""
     typed_doc: dict[str, object] = _PLAIN_DICT_ADAPTER.validate_python(doc)
     # Check for unknown top-level keys
-    known_keys = {"schema_version", "default_profile", "opencode_executable", "profiles"}
+    known_keys = {
+        "schema_version",
+        "default_profile",
+        "opencode_executable",
+        "profiles",
+    }
     for key in typed_doc:
         if key not in known_keys:
             raise RegistryError(f"Unknown registry key: {key!r}")

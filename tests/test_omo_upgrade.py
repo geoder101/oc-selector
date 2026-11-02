@@ -74,7 +74,12 @@ class TestValidateOmoConfig:
 
 
 class TestRunOmoUpgrade:
-    def test_happy_validate_only(self, valid_config: Path, schema: OmoSchema, tmp_path: Path) -> None:
+    def test_happy_validate_only(
+        self,
+        valid_config: Path,
+        schema: OmoSchema,
+        tmp_path: Path,
+    ) -> None:
         state_root = tmp_path / "state"
         state_root.mkdir()
         result = run_omo_upgrade(valid_config, schema, state_root)

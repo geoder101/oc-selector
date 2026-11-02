@@ -29,7 +29,9 @@ if TYPE_CHECKING:
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 _SCRIPTS_ADAPTER: TypeAdapter[dict[str, str]] = TypeAdapter(dict[str, str])
-_ERROR_CLASS_ADAPTER: TypeAdapter[type[errors.OcSelectorError]] = TypeAdapter(type[errors.OcSelectorError])
+_ERROR_CLASS_ADAPTER: TypeAdapter[type[errors.OcSelectorError]] = TypeAdapter(
+    type[errors.OcSelectorError],
+)
 _RECORD_ADAPTER: TypeAdapter[dict[str, object]] = TypeAdapter(dict[str, object])
 
 
@@ -45,7 +47,10 @@ class TestPackaging:
         assert list(scripts) == ["oc-selector"]
         assert scripts["oc-selector"] == "oc_selector.cli:main"
 
-    def test_happy_import_has_no_side_effects(self, process_harness: ProcessHarness) -> None:
+    def test_happy_import_has_no_side_effects(
+        self,
+        process_harness: ProcessHarness,
+    ) -> None:
         """Importing oc_selector in a fresh process creates no files or dirs."""
         script = (
             "import os\n"
@@ -128,13 +133,18 @@ class TestIsolation:
         assert Path.cwd() == isolated_home
         assert (isolated_home / ".config").is_dir()
 
-    def test_failure_personal_home_access_denied(self, deny_personal_home: HomeGuard) -> None:
+    def test_failure_personal_home_access_denied(
+        self,
+        deny_personal_home: HomeGuard,
+    ) -> None:
         """Attempting to access the real home directory is detected."""
         # A path inside the isolated home is allowed.
         deny_personal_home.assert_isolated(deny_personal_home.isolated_home / "ok.txt")
         # A path in the real home is detected as a violation.
         with pytest.raises(AssertionError):
-            deny_personal_home.assert_isolated(deny_personal_home.real_home / "evil.txt")
+            deny_personal_home.assert_isolated(
+                deny_personal_home.real_home / "evil.txt",
+            )
 
 
 class TestSubprocessHarness:
@@ -146,7 +156,12 @@ class TestSubprocessHarness:
         fixture_executable: Callable[..., Path],
     ) -> None:
         """Fixture executable records argv, stdout, stderr and exit code."""
-        exe = fixture_executable("opencode", stdout="hello\n", stderr="warn\n", exit_code=0)
+        exe = fixture_executable(
+            "opencode",
+            stdout="hello\n",
+            stderr="warn\n",
+            exit_code=0,
+        )
         result = process_harness.run([exe, "run", "--flag"], stdin="stdin-data")
         assert result.exit_code == 0
         assert result.stdout == "hello\n"
@@ -177,12 +192,19 @@ class TestSubprocessHarness:
         fixture_executable: Callable[..., Path],
     ) -> None:
         """Non-zero exit codes and stderr are captured correctly."""
-        exe = fixture_executable("opencode", stdout="partial\n", stderr="boom\n", exit_code=3)
+        exe = fixture_executable(
+            "opencode",
+            stdout="partial\n",
+            stderr="boom\n",
+            exit_code=3,
+        )
         result = process_harness.run([exe, "run"])
         assert result.exit_code == 3
         assert result.stderr == "boom\n"
         assert result.stdout == "partial\n"
-        recorded = _RECORD_ADAPTER.validate_python(json.loads(result.record_path.read_text(encoding="utf-8")))
+        recorded = _RECORD_ADAPTER.validate_python(
+            json.loads(result.record_path.read_text(encoding="utf-8")),
+        )
         assert recorded["exit_code"] == 3
         assert recorded["stderr"] == "boom\n"
 
@@ -191,7 +213,10 @@ class TestSubprocessHarness:
         verify = _PROJECT_ROOT / "tools" / "verify.py"
         evidence = tmp_path / "evidence.txt"
         child = tmp_path / "child.py"
-        child.write_text("import sys\nsys.stderr.write('expected-fail\\n')\nsys.exit(4)\n", encoding="utf-8")
+        child.write_text(
+            "import sys\nsys.stderr.write('expected-fail\\n')\nsys.exit(4)\n",
+            encoding="utf-8",
+        )
         argv = [
             sys.executable,
             str(verify),

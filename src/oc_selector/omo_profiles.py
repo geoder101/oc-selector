@@ -184,7 +184,9 @@ def build_native_entry(
     if agents:
         entry["agents"] = {name: {"models": models} for name, models in agents.items()}
     if categories:
-        entry["categories"] = {name: {"models": models} for name, models in categories.items()}
+        entry["categories"] = {
+            name: {"models": models} for name, models in categories.items()
+        }
     return entry
 
 
@@ -199,7 +201,9 @@ def validate_model_id(model_id: str) -> str:
     control_char_limit = 32
     min_parts = 2
     if any(c.isspace() or ord(c) < control_char_limit for c in model_id):
-        raise SchemaValidationError(f"Model ID contains whitespace/control: {model_id!r}")
+        raise SchemaValidationError(
+            f"Model ID contains whitespace/control: {model_id!r}",
+        )
     parts = model_id.split("/", 1)
     if len(parts) < min_parts or not parts[0] or not parts[1]:
         raise SchemaValidationError(

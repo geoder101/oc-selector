@@ -49,7 +49,9 @@ class JsoncAdapter:
         """
         try:
             ml = loader.ModelLoader()
-            wrapped = _JsonTextWrapper.model_validate({"value": loader.loads(text, loader=ml)})
+            wrapped = _JsonTextWrapper.model_validate(
+                {"value": loader.loads(text, loader=ml)},
+            )
         except Exception as e:
             raise SchemaValidationError(f"JSONC parse failed: {e}") from e
         return wrapped.value
@@ -91,7 +93,9 @@ class JsoncAdapter:
         """Get a child node by key from a JSONObject or JSONText."""
         obj = node.value if isinstance(node, JSONText) else node
         if not isinstance(obj, JSONObject):
-            raise SchemaValidationError(f"Expected object at key {key!r}, got {type(obj).__name__}")
+            raise SchemaValidationError(
+                f"Expected object at key {key!r}, got {type(obj).__name__}",
+            )
         for i, k in enumerate(obj.keys):
             if k.characters == key:  # pyright: ignore[reportAttributeAccessIssue,reportUnknownMemberType]
                 return obj.values[i]
@@ -108,4 +112,6 @@ class JsoncAdapter:
     def to_plain(self, model: JSONText) -> dict[str, object]:
         """Convert model to plain Python dict (loses comments)."""
         ml = loader.DefaultLoader()
-        return _PLAIN_DICT_ADAPTER.validate_python(loader.loads(self.dump(model), loader=ml))
+        return _PLAIN_DICT_ADAPTER.validate_python(
+            loader.loads(self.dump(model), loader=ml),
+        )

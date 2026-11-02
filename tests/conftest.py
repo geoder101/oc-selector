@@ -36,8 +36,12 @@ class HomeGuard:
     def assert_isolated(self, path: Path) -> None:
         """Assert ``path`` is within the isolated home and not the real home."""
         resolved = path.resolve()
-        assert resolved.is_relative_to(self.isolated_home.resolve()), f"path {path} escapes the isolated home"
-        assert not resolved.is_relative_to(self.real_home.resolve()), f"path {path} touches the real home"
+        assert resolved.is_relative_to(self.isolated_home.resolve()), (
+            f"path {path} escapes the isolated home"
+        )
+        assert not resolved.is_relative_to(self.real_home.resolve()), (
+            f"path {path} touches the real home"
+        )
 
 
 @pytest.fixture

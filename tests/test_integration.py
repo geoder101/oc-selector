@@ -55,7 +55,10 @@ class TestFullUserWorkflow:
         assert "Created" in r.output or "Already" in r.output
 
         # 2. Create first profile
-        r = runner.invoke(app, ["create", "work", "work-dir", "--model", "test/provider/work"])
+        r = runner.invoke(
+            app,
+            ["create", "work", "work-dir", "--model", "test/provider/work"],
+        )
         assert r.exit_code == 0
         assert "Created" in r.output
 
@@ -220,26 +223,39 @@ class TestUpgradeOmo:
     def _registry_with_omo() -> Registry:
         return Registry(
             default_profile="omo",
-            profiles={"omo": ProfileEntry(directory="omo-dir", omo_profile="oc-selector-omo")},
+            profiles={
+                "omo": ProfileEntry(directory="omo-dir", omo_profile="oc-selector-omo"),
+            },
         )
 
     def test_happy_upgrade_dry_run(self, isolated_env: Path) -> None:
         self._write_omo("1.0.0")
         (isolated_env / "oc-selector").mkdir(parents=True, exist_ok=True)
-        (isolated_env / "oc-selector" / "config.toml").write_text(registry_to_toml(self._registry_with_omo()))
-        r = runner.invoke(app, ["upgrade-omo", "omo", "--version", "2.0.0", "--dry-run"])
+        (isolated_env / "oc-selector" / "config.toml").write_text(
+            registry_to_toml(self._registry_with_omo()),
+        )
+        r = runner.invoke(
+            app,
+            ["upgrade-omo", "omo", "--version", "2.0.0", "--dry-run"],
+        )
         assert r.exit_code == 0
         assert "would upgrade" in r.output
-        data = _OMO_ADAPTER.validate_python(json.loads((Path.home() / ".omo").read_text()))
+        data = _OMO_ADAPTER.validate_python(
+            json.loads((Path.home() / ".omo").read_text()),
+        )
         assert data["version"] == "1.0.0"
 
     def test_happy_upgrade_writes(self, isolated_env: Path) -> None:
         self._write_omo("1.0.0")
         (isolated_env / "oc-selector").mkdir(parents=True, exist_ok=True)
-        (isolated_env / "oc-selector" / "config.toml").write_text(registry_to_toml(self._registry_with_omo()))
+        (isolated_env / "oc-selector" / "config.toml").write_text(
+            registry_to_toml(self._registry_with_omo()),
+        )
         r = runner.invoke(app, ["upgrade-omo", "omo", "--version", "2.0.0"])
         assert r.exit_code == 0
-        data = _OMO_ADAPTER.validate_python(json.loads((Path.home() / ".omo").read_text()))
+        data = _OMO_ADAPTER.validate_python(
+            json.loads((Path.home() / ".omo").read_text()),
+        )
         assert data["version"] == "2.0.0"
 
     def test_happy_upgrade_all_no_eligible(self, isolated_env: Path) -> None:  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]

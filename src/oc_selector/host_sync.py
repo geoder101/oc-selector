@@ -37,7 +37,12 @@ class PackageJson(BaseModel):
     ``version`` fails validation and is treated as corruption (None).
     """
 
-    model_config: ClassVar[ConfigDict] = ConfigDict(extra="ignore", frozen=True, strict=True, validate_default=True)
+    model_config: ClassVar[ConfigDict] = ConfigDict(
+        extra="ignore",
+        frozen=True,
+        strict=True,
+        validate_default=True,
+    )
 
     name: str = "unknown"
     version: str = "0.0.0"

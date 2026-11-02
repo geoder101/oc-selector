@@ -121,7 +121,9 @@ def run_omo_upgrade(
     current_version = "unknown"
     if config_path.exists():
         try:
-            current_data = _PLAIN_DICT_ADAPTER.validate_python(json.loads(config_path.read_text()))
+            current_data = _PLAIN_DICT_ADAPTER.validate_python(
+                json.loads(config_path.read_text()),
+            )
             current_version = str(current_data.get("version", "unknown"))
         except (json.JSONDecodeError, OSError, ValidationError):
             current_version = "unknown"

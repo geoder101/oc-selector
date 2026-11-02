@@ -31,7 +31,10 @@ def _make_registry() -> Registry:
         opencode_executable="opencode",
         profiles={
             "default": ProfileEntry(directory="opencode"),
-            "gpt": ProfileEntry(directory="opencode_gpt", omo_profile="oc-selector-gpt"),
+            "gpt": ProfileEntry(
+                directory="opencode_gpt",
+                omo_profile="oc-selector-gpt",
+            ),
             "local": ProfileEntry(directory="opencode_local"),
         },
     )
@@ -64,7 +67,10 @@ class TestBuildLaunchEnv:
         env = build_launch_env(reg, "default", base_env={})
         assert env["OPENCODE_CONFIG_DIR"] == "/tmp/test-xdg/opencode"
 
-    def test_happy_unmanaged_preserves_omo(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_happy_unmanaged_preserves_omo(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         monkeypatch.setenv("XDG_CONFIG_HOME", "/tmp/test-xdg")
         reg = _make_registry()
         base = {"OMO_PROFILE": "inherited-omo", "OCX_PROFILE": "inherited-ocx"}
@@ -73,7 +79,10 @@ class TestBuildLaunchEnv:
         assert env["OMO_PROFILE"] == "inherited-omo"
         assert env["OCX_PROFILE"] == "inherited-ocx"
 
-    def test_happy_owned_sets_omo_clears_ocx(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_happy_owned_sets_omo_clears_ocx(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         monkeypatch.setenv("XDG_CONFIG_HOME", "/tmp/test-xdg")
         reg = _make_registry()
         base = {"OMO_PROFILE": "old-omo", "OCX_PROFILE": "old-ocx"}

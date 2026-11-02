@@ -1,7 +1,8 @@
 """Recoverable transactions with private backups and cross-platform locks.
 
 Contract:
-- One portalocker exclusive lock at state root protects every mutation AND launch admission.
+- One portalocker exclusive lock at state root protects every mutation AND
+  launch admission.
 - Bounded 5-second acquisition.
 - Journal state machine: prepared -> applying -> committed -> cleanup-complete.
 - Flush committed state BEFORE deleting ANY rollback material.
@@ -139,7 +140,9 @@ class Transaction:
             portalocker.lock(self._lock_fd, portalocker.LOCK_EX | portalocker.LOCK_NB)
         except portalocker.LockException:
             os.close(self._lock_fd)
-            raise MaintenanceError("Could not acquire maintenance lock (timeout)") from None
+            raise MaintenanceError(
+                "Could not acquire maintenance lock (timeout)",
+            ) from None
 
     def _release_lock(self) -> None:
         """Release the lock."""
@@ -163,7 +166,11 @@ class Transaction:
             timestamp=_utc_now(),
         )
         data = json.dumps(journal_to_dict(journal), indent=2)
-        fd = os.open(str(self._journal_path), os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600)
+        fd = os.open(
+            str(self._journal_path),
+            os.O_CREAT | os.O_WRONLY | os.O_TRUNC,
+            0o600,
+        )
         try:
             os.write(fd, data.encode())
             os.fsync(fd)

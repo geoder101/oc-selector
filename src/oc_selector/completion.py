@@ -37,7 +37,9 @@ _MANAGEMENT_COMMANDS: tuple[str, ...] = (
 def validate_shell(shell: str) -> str:
     """Validate shell name. Raises ``ArgumentError`` if unsupported."""
     if shell not in _SUPPORTED_SHELLS:
-        raise ArgumentError(f"Unsupported shell: {shell!r}. Supported: {', '.join(sorted(_SUPPORTED_SHELLS))}")
+        raise ArgumentError(
+            f"Unsupported shell: {shell!r}. Supported: {', '.join(sorted(_SUPPORTED_SHELLS))}",
+        )
     return shell
 
 
@@ -145,12 +147,16 @@ def _fish_script(cmd: str, profiles: list[str]) -> str:
     lines = [f"# {cmd} fish completion"]
     profile_list = " ".join(profiles)
     mgmt_list = " ".join(_MANAGEMENT_COMMANDS)
-    lines.append(f"complete -c {cmd} -n '__fish_use_subcommand' -w \"{mgmt_list} {profile_list}\"")
+    lines.append(
+        f"complete -c {cmd} -n '__fish_use_subcommand' -w \"{mgmt_list} {profile_list}\"",
+    )
     lines.extend(
         f'complete -c {cmd} -n "__fish_seen_subcommand_from {c}" -w "{profile_list}"'
         for c in ("create", "edit", "set-default", "sync", "upgrade-omo")
     )
-    lines.append(f'complete -c {cmd} -n "__fish_seen_subcommand_from completion" -w "bash zsh fish powershell"')
+    lines.append(
+        f'complete -c {cmd} -n "__fish_seen_subcommand_from completion" -w "bash zsh fish powershell"',
+    )
     return "\n".join(lines) + "\n"
 
 

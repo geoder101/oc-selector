@@ -36,6 +36,7 @@ class _CliArgs(BaseModel):
     evidence: str
     expect_exit: int | None = None
 
+
 # Built-in fixture secret canaries that must never appear in evidence.
 _BUILTIN_SECRETS = (
     "ocx-canary-api-key-0001",
@@ -92,8 +93,17 @@ def main() -> int:
     opts, command = _split_command(sys.argv[1:])
 
     parser = argparse.ArgumentParser(description="Evidence runner for oc-selector.")
-    parser.add_argument("--evidence", required=True, help="Path to write the evidence file.")
-    parser.add_argument("--expect-exit", type=int, default=None, help="Expected child exit code.")
+    parser.add_argument(
+        "--evidence",
+        required=True,
+        help="Path to write the evidence file.",
+    )
+    parser.add_argument(
+        "--expect-exit",
+        type=int,
+        default=None,
+        help="Expected child exit code.",
+    )
     ns = parser.parse_args(opts)
     args = _CliArgs.model_validate(vars(ns))
     evidence_path = Path(args.evidence)
@@ -106,7 +116,13 @@ def main() -> int:
     started = _utc_now()
     completed = subprocess.run(command, capture_output=True, text=True, check=False)
     finished = _utc_now()
-    expectation = "n/a" if expect_exit is None else "matched" if completed.returncode == expect_exit else "not-matched"
+    expectation = (
+        "n/a"
+        if expect_exit is None
+        else "matched"
+        if completed.returncode == expect_exit
+        else "not-matched"
+    )
 
     stdout_red = _ensure_newline(redact(completed.stdout))
     stderr_red = _ensure_newline(redact(completed.stderr))

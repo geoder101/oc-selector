@@ -68,7 +68,11 @@ class TestCreateWizard:
         result = run_create_wizard(inp, registry_path, state_root)
         assert result.success is True
 
-    def test_failure_duplicate_name(self, registry_path: Path, state_root: Path) -> None:
+    def test_failure_duplicate_name(
+        self,
+        registry_path: Path,
+        state_root: Path,
+    ) -> None:
         inp = CreateProfileInput(
             name="default",
             directory="other",
@@ -86,7 +90,11 @@ class TestCreateWizard:
         result = run_create_wizard(inp, registry_path, state_root)
         assert result.success is False
 
-    def test_failure_empty_directory(self, registry_path: Path, state_root: Path) -> None:
+    def test_failure_empty_directory(
+        self,
+        registry_path: Path,
+        state_root: Path,
+    ) -> None:
         inp = CreateProfileInput(
             name="test",
             directory="",
@@ -106,7 +114,11 @@ class TestEditWizard:
         reg = load_registry(registry_path)
         assert reg.profiles["default"].directory == "new-dir"
 
-    def test_happy_edit_preserves_omo(self, registry_path: Path, state_root: Path) -> None:
+    def test_happy_edit_preserves_omo(
+        self,
+        registry_path: Path,
+        state_root: Path,
+    ) -> None:
         # First create with omo_profile
         create_inp = CreateProfileInput(
             name="with-omo",
@@ -124,7 +136,11 @@ class TestEditWizard:
         reg = load_registry(registry_path)
         assert reg.profiles["with-omo"].omo_profile == "omo-test"
 
-    def test_failure_profile_not_found(self, registry_path: Path, state_root: Path) -> None:
+    def test_failure_profile_not_found(
+        self,
+        registry_path: Path,
+        state_root: Path,
+    ) -> None:
         inp = EditProfileInput(
             name="nonexistent",
             directory="dir",
@@ -134,7 +150,11 @@ class TestEditWizard:
         assert result.error is not None
         assert "not found" in result.error
 
-    def test_failure_empty_directory(self, registry_path: Path, state_root: Path) -> None:
+    def test_failure_empty_directory(
+        self,
+        registry_path: Path,
+        state_root: Path,
+    ) -> None:
         inp = EditProfileInput(
             name="default",
             directory="",
@@ -157,13 +177,21 @@ class TestSetDefault:
         reg = load_registry(registry_path)
         assert reg.default_profile == "second"
 
-    def test_failure_profile_not_found(self, registry_path: Path, state_root: Path) -> None:
+    def test_failure_profile_not_found(
+        self,
+        registry_path: Path,
+        state_root: Path,
+    ) -> None:
         result = run_set_default("nonexistent", registry_path, state_root)
         assert result.success is False
         assert result.error is not None
         assert "not found" in result.error
 
-    def test_happy_set_same_default(self, registry_path: Path, state_root: Path) -> None:
+    def test_happy_set_same_default(
+        self,
+        registry_path: Path,
+        state_root: Path,
+    ) -> None:
         result = run_set_default("default", registry_path, state_root)
         assert result.success is True
         reg = load_registry(registry_path)

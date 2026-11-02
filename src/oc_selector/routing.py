@@ -18,7 +18,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from oc_selector.errors import ArgumentError, RegistryError
-from oc_selector.registry import MANAGEMENT_NAMES, RESERVED_NAMES, Registry, validate_profile_name
+from oc_selector.registry import (
+    MANAGEMENT_NAMES,
+    RESERVED_NAMES,
+    Registry,
+    validate_profile_name,
+)
 
 # --- Route variants ---
 
@@ -119,7 +124,9 @@ _GRAMMAR: dict[str, _CmdSpec] = {
     "help": _CmdSpec(frozenset({"--version"}), 0),
 }
 
-_VALUE_FLAGS: frozenset[str] = frozenset({"--version", "--alias", "--model", "--directory"})
+_VALUE_FLAGS: frozenset[str] = frozenset(
+    {"--version", "--alias", "--model", "--directory"},
+)
 
 
 def validate_management_args(command: str, args: tuple[str, ...]) -> None:  # noqa: C901, PLR0912
@@ -152,14 +159,17 @@ def validate_management_args(command: str, args: tuple[str, ...]) -> None:  # no
                 if tok == "--alias":
                     validate_profile_name(value)
             if tok == "--recover" and ("--no-backup" in args or "--dry-run" in args):
-                raise ArgumentError("--recover cannot combine with --no-backup or --dry-run")
+                raise ArgumentError(
+                    "--recover cannot combine with --no-backup or --dry-run",
+                )
         else:
             positionals.append(tok)
         i += 1
 
     if len(positionals) > max_positionals:
+        count = len(positionals)
         raise ArgumentError(
-            f"Too many arguments for {command!r}: got {len(positionals)}, max {max_positionals}",
+            f"Too many arguments for {command!r}: got {count}, max {max_positionals}",
         )
 
     # PROFILE + --all is error 2

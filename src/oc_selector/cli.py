@@ -32,7 +32,12 @@ from oc_selector.errors import OcSelectorError
 from oc_selector.host_sync import sync_host_package
 from oc_selector.init_flow import run_init, run_recovery_all
 from oc_selector.omo_upgrade import OmoSchema, run_omo_upgrade
-from oc_selector.paths import omo_config_path, registry_path, resolve_config_parent, state_root
+from oc_selector.paths import (
+    omo_config_path,
+    registry_path,
+    resolve_config_parent,
+    state_root,
+)
 from oc_selector.process import launch_native, resolve_executable
 from oc_selector.registry import Registry, load_registry
 from oc_selector.routing import GRAMMAR_DOC, ManagementRoute, route
@@ -90,15 +95,28 @@ def _run_recovery() -> None:
             typer.echo(f"Failed: {entry.journal_id} - {entry.error}", err=True)
 
 
-def _eligible_profiles(reg: Registry, profile: str | None, *, all_profiles: bool) -> list[str]:
+def _eligible_profiles(
+    reg: Registry,
+    profile: str | None,
+    *,
+    all_profiles: bool,
+) -> list[str]:
     """Return the OMO-eligible profile names, or exit 2 on an invalid selection."""
     if all_profiles:
-        return [name for name, entry in reg.profiles.items() if entry.omo_profile is not None]
+        return [
+            name
+            for name, entry in reg.profiles.items()
+            if entry.omo_profile is not None
+        ]
     target_name = profile or reg.default_profile
     if target_name not in reg.profiles:
         _error_exit(f"Profile {target_name!r} not found", code=2)
     if reg.profiles[target_name].omo_profile is None:
-        _error_exit(f"Profile {target_name!r} does not declare an OMO profile; nothing to upgrade", code=2)
+        name = target_name
+        _error_exit(
+            f"Profile {name!r} does not declare an OMO profile; nothing to upgrade",
+            code=2,
+        )
     return [target_name]
 
 
@@ -118,7 +136,11 @@ def _resolve_target_version(reg: Registry, explicit: str | None) -> str:
         return explicit
     resolved, status = probe_version(reg.opencode_executable)
     if status != "ok" or resolved is None:
-        _error_exit(f"Cannot resolve host version from {reg.opencode_executable!r} (status: {status}).", code=2)
+        exe = reg.opencode_executable
+        _error_exit(
+            f"Cannot resolve host version from {exe!r} (status: {status}).",
+            code=2,
+        )
     if not _is_1x_release(resolved):
         _error_exit(f"Unsupported host version for maintenance: {resolved!r}", code=2)
     return resolved
@@ -127,9 +149,18 @@ def _resolve_target_version(reg: Registry, explicit: str | None) -> str:
 @app.command()
 def init(
     *,
-    no_backup: Annotated[bool, typer.Option("--no-backup", help="Skip backups (inert for init)")] = False,
-    dry_run: Annotated[bool, typer.Option("--dry-run", help="Preview without writing")] = False,
-    recover: Annotated[bool, typer.Option("--recover", help="Recover pending transactions")] = False,
+    no_backup: Annotated[
+        bool,
+        typer.Option("--no-backup", help="Skip backups (inert for init)"),
+    ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Preview without writing"),
+    ] = False,
+    recover: Annotated[
+        bool,
+        typer.Option("--recover", help="Recover pending transactions"),
+    ] = False,
 ) -> None:
     """Initialize oc-selector configuration."""
     if recover and (no_backup or dry_run):
@@ -158,15 +189,26 @@ def create(
     directory: Annotated[str | None, typer.Argument(help="Profile directory")] = None,
     *,
     model: Annotated[str | None, typer.Option("--model", "-m", help="Model ID")] = None,
-    no_interactive: Annotated[bool, typer.Option("--no-interactive", help="Do not prompt for the directory")] = False,
-    dry_run: Annotated[bool, typer.Option("--dry-run", help="Preview without writing")] = False,
+    no_interactive: Annotated[
+        bool,
+        typer.Option("--no-interactive", help="Do not prompt for the directory"),
+    ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Preview without writing"),
+    ] = False,
 ) -> None:
     """Create a new profile."""
     _require_registry()
     if directory is None:
         if no_interactive or not sys.stdin.isatty():
-            _error_exit(f"Directory is required for profile {name!r}; pass it as an argument.", code=2)
-        raw = _PROMPT_ADAPTER.validate_python(typer.prompt(f"Directory for profile {name!r}"))
+            _error_exit(
+                f"Directory is required for profile {name!r}; pass it as an argument.",
+                code=2,
+            )
+        raw = _PROMPT_ADAPTER.validate_python(
+            typer.prompt(f"Directory for profile {name!r}"),
+        )
         if not raw.strip():
             _error_exit("Directory cannot be empty.", code=2)
         directory = raw.strip()
@@ -182,9 +224,18 @@ def create(
 def edit(
     name: Annotated[str, typer.Argument(help="Profile name")],
     *,
-    directory: Annotated[str | None, typer.Option("--directory", "-d", help="New directory")] = None,
-    model: Annotated[str | None, typer.Option("--model", "-m", help="New model ID")] = None,
-    dry_run: Annotated[bool, typer.Option("--dry-run", help="Preview without writing")] = False,
+    directory: Annotated[
+        str | None,
+        typer.Option("--directory", "-d", help="New directory"),
+    ] = None,
+    model: Annotated[
+        str | None,
+        typer.Option("--model", "-m", help="New model ID"),
+    ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Preview without writing"),
+    ] = False,
 ) -> None:
     """Edit an existing profile."""
     _require_registry()
@@ -200,7 +251,10 @@ def edit(
 def set_default_cmd(
     name: Annotated[str, typer.Argument(help="Profile name to set as default")],
     *,
-    dry_run: Annotated[bool, typer.Option("--dry-run", help="Preview without writing")] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Preview without writing"),
+    ] = False,
 ) -> None:
     """Set the default profile (registry-only)."""
     _require_registry()
@@ -214,7 +268,10 @@ def set_default_cmd(
 @app.command("list")
 def list_profiles(
     *,
-    json_output: Annotated[bool, typer.Option("--json", help="Emit machine-readable JSON")] = False,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Emit machine-readable JSON"),
+    ] = False,
 ) -> None:
     """List all registered profiles."""
     _, reg = _require_registry()
@@ -242,7 +299,10 @@ def list_profiles(
 @app.command()
 def info(
     *,
-    json_output: Annotated[bool, typer.Option("--json", help="Emit machine-readable JSON")] = False,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Emit machine-readable JSON"),
+    ] = False,
 ) -> None:
     """Collect and display diagnostics for the current setup."""
     reg_path = registry_path()
@@ -262,8 +322,14 @@ def info(
 def sync(
     profile: Annotated[str | None, typer.Argument(help="Profile to sync")] = None,
     *,
-    all_profiles: Annotated[bool, typer.Option("--all", help="Sync all profiles")] = False,
-    dry_run: Annotated[bool, typer.Option("--dry-run", help="Preview without running the package manager")] = False,
+    all_profiles: Annotated[
+        bool,
+        typer.Option("--all", help="Sync all profiles"),
+    ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Preview without running the package manager"),
+    ] = False,
 ) -> None:
     """Sync the host package for selected profiles."""
     if profile is not None and all_profiles:
@@ -281,12 +347,19 @@ def sync(
         return
     failed = False
     for target_name, entry in targets:
-        result = sync_host_package(parent / entry.directory, state_root(), dry_run=dry_run)
+        result = sync_host_package(
+            parent / entry.directory,
+            state_root(),
+            dry_run=dry_run,
+        )
         if result.success:
             typer.echo(f"{target_name}: {result.message}")
         else:
             failed = True
-            typer.echo(f"{target_name}: {result.message} ({result.error or 'error'})", err=True)
+            typer.echo(
+                f"{target_name}: {result.message} ({result.error or 'error'})",
+                err=True,
+            )
     if failed:
         raise typer.Exit(1)
 
@@ -295,9 +368,18 @@ def sync(
 def upgrade_omo_cmd(
     profile: Annotated[str | None, typer.Argument(help="Profile to upgrade")] = None,
     *,
-    version: Annotated[str | None, typer.Option("--version", help="Target OMO version")] = None,
-    all_profiles: Annotated[bool, typer.Option("--all", help="Upgrade all eligible profiles")] = False,
-    dry_run: Annotated[bool, typer.Option("--dry-run", help="Preview without writing")] = False,
+    version: Annotated[
+        str | None,
+        typer.Option("--version", help="Target OMO version"),
+    ] = None,
+    all_profiles: Annotated[
+        bool,
+        typer.Option("--all", help="Upgrade all eligible profiles"),
+    ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Preview without writing"),
+    ] = False,
 ) -> None:
     """Upgrade the OMO config to a target version."""
     if profile is not None and all_profiles:
@@ -314,7 +396,13 @@ def upgrade_omo_cmd(
     target_version = _resolve_target_version(reg, version)
     schema = OmoSchema(version=target_version, required_fields=("version",))
     new_config: dict[str, object] = {**current, "version": target_version}
-    result = run_omo_upgrade(omo_path, schema, state_root(), new_config=new_config, dry_run=dry_run)
+    result = run_omo_upgrade(
+        omo_path,
+        schema,
+        state_root(),
+        new_config=new_config,
+        dry_run=dry_run,
+    )
     if result.success:
         typer.echo(result.message)
     else:
@@ -324,7 +412,10 @@ def upgrade_omo_cmd(
 @app.command()
 def completion(
     shell: Annotated[str, typer.Argument(help="Shell: bash, zsh, fish, powershell")],
-    alias: Annotated[str | None, typer.Option("--alias", help="Register under an alias name")] = None,
+    alias: Annotated[
+        str | None,
+        typer.Option("--alias", help="Register under an alias name"),
+    ] = None,
 ) -> None:
     """Generate a shell completion script."""
     reg_path = registry_path()
@@ -336,7 +427,10 @@ def completion(
 @app.command("help")
 def help_cmd(
     *,
-    version: Annotated[bool, typer.Option("--version", help="Print the wrapper version")] = False,
+    version: Annotated[
+        bool,
+        typer.Option("--version", help="Print the wrapper version"),
+    ] = False,
 ) -> None:
     """Show wrapper usage and the management grammar."""
     if version:

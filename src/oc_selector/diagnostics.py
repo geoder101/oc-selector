@@ -22,7 +22,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from oc_selector import __version__
-from oc_selector.paths import omo_config_path, registry_path, resolve_config_parent, state_root
+from oc_selector.paths import (
+    omo_config_path,
+    registry_path,
+    resolve_config_parent,
+    state_root,
+)
 
 if TYPE_CHECKING:
     from oc_selector.registry import Registry
@@ -156,7 +161,12 @@ def collect_diagnostics(
                 ),
             )
     else:
-        warnings.append({"code": "registry-absent", "message": "Registry file not found or invalid"})
+        warnings.append(
+            {
+                "code": "registry-absent",
+                "message": "Registry file not found or invalid",
+            },
+        )
 
     # Version probe (only one subprocess call)
     version, ver_status = version_probe(opencode_exe, 2.0)
@@ -164,10 +174,20 @@ def collect_diagnostics(
     # Lock status (read-only, no acquisition)
     lock_path = st_root / "maintenance.lock"
     lock_status = "absent"
-    lock_info: dict[str, object] = {"status": lock_status, "pid": None, "host": None, "started_at": None}
+    lock_info: dict[str, object] = {
+        "status": lock_status,
+        "pid": None,
+        "host": None,
+        "started_at": None,
+    }
     if lock_path.exists():
         lock_status = "present"
-        lock_info = {"status": lock_status, "pid": None, "host": None, "started_at": None}
+        lock_info = {
+            "status": lock_status,
+            "pid": None,
+            "host": None,
+            "started_at": None,
+        }
 
     # Recovery status (read-only journal check)
     recovery_dir = st_root / "journals"
@@ -178,7 +198,13 @@ def collect_diagnostics(
         if journals:
             recovery_status = "pending"
             transactions.extend(
-                {"id": j.name, "operation": "unknown", "phase": "unknown", "profiles": []} for j in journals
+                {
+                    "id": j.name,
+                    "operation": "unknown",
+                    "phase": "unknown",
+                    "profiles": [],
+                }
+                for j in journals
             )
 
     return DiagnosticsResult(
