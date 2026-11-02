@@ -69,6 +69,14 @@ class TestRunInit:
         with pytest.raises(RegistryError):
             run_init(config_parent=parent)
 
+    def test_failure_unwritable_registry(self, tmp_path: Path) -> None:
+        # File where the registry directory is expected blocks the write.
+        parent = tmp_path / "config"
+        parent.mkdir()
+        (parent / "oc-selector").write_text("i am a file")
+        with pytest.raises(RegistryError, match="Cannot create registry"):
+            run_init(config_parent=parent)
+
 
 class TestListPendingRecoveries:
     def test_happy_no_pending(self, tmp_path: Path) -> None:
@@ -138,6 +146,79 @@ class TestRunRecovery:
         assert result.recovered is True
         assert result.journal_id == "rec-test"
 
+    def test_happy_recover_restores_preimage(self, tmp_path: Path) -> None:
+        journals_dir = tmp_path / "journals"
+        journals_dir.mkdir()
+        target = tmp_path / "target.txt"
+        target.write_text("corrupted")
+        backup = tmp_path / "target.txt.bak"
+        backup.write_text("original")
+        journal_data: dict[str, object] = {
+            "id": "rec-restore",
+            "operation": "edit",
+            "phase": "prepared",
+            "resources": [
+                {
+                    "path": str(target),
+                    "preimage_hash": "abc123",
+                    "existed": True,
+                },
+                # Skipped: never existed, so no preimage to restore.
+                {
+                    "path": str(tmp_path / "never-existed"),
+                    "existed": False,
+                },
+                # Skipped: preimage recorded but the backup file is absent.
+                {
+                    "path": str(tmp_path / "no-backup"),
+                    "preimage_hash": "def456",
+                    "existed": True,
+                },
+            ],
+            "affected_profiles": ["default"],
+            "pid": 0,
+            "host": "test",
+            "timestamp": "2025-01-01T00:00:00Z",
+        }
+        jpath = journals_dir / "rec-restore.json"
+        jpath.write_text(json.dumps(journal_data))
+        result = run_recovery(jpath, state_dir=tmp_path)
+        assert result.recovered is True
+        assert target.read_text() == "original"
+
+    def test_failure_recover_restore_copy_error(self, tmp_path: Path) -> None:
+        # The resource's parent directory is read-only, so the copy fails.
+        journals_dir = tmp_path / "journals"
+        journals_dir.mkdir()
+        ro_dir = tmp_path / "ro"
+        ro_dir.mkdir()
+        blocked = ro_dir / "target"
+        (ro_dir / "target.bak").write_text("backup")
+        ro_dir.chmod(0o500)
+        journal_data: dict[str, object] = {
+            "id": "rec-fail",
+            "operation": "edit",
+            "phase": "prepared",
+            "resources": [
+                {
+                    "path": str(blocked),
+                    "preimage_hash": "abc123",
+                    "existed": True,
+                },
+            ],
+            "affected_profiles": [],
+            "pid": 0,
+            "host": "test",
+            "timestamp": "2025-01-01T00:00:00Z",
+        }
+        jpath = journals_dir / "rec-fail.json"
+        jpath.write_text(json.dumps(journal_data))
+        try:
+            with pytest.raises(TransactionError, match="Cannot restore"):
+                run_recovery(jpath, state_dir=tmp_path)
+        finally:
+            ro_dir.chmod(0o700)
+
 
 class TestRunRecoveryAll:
     def test_happy_no_pending(self, tmp_path: Path) -> None:
@@ -162,3 +243,38 @@ class TestRunRecoveryAll:
         results = run_recovery_all(state_dir=tmp_path)
         assert len(results) == 2
         assert all(r.recovered for r in results)
+
+    def test_records_failure_result(self, tmp_path: Path) -> None:
+        journals_dir = tmp_path / "journals"
+        journals_dir.mkdir()
+        ro_dir = tmp_path / "ro"
+        ro_dir.mkdir()
+        blocked = ro_dir / "target"
+        (ro_dir / "target.bak").write_text("backup")
+        ro_dir.chmod(0o500)
+        journal_data: dict[str, object] = {
+            "id": "batch-fail",
+            "operation": "create",
+            "phase": "prepared",
+            "resources": [
+                {
+                    "path": str(blocked),
+                    "preimage_hash": "abc123",
+                    "existed": True,
+                },
+            ],
+            "affected_profiles": [],
+            "pid": 0,
+            "host": "test",
+            "timestamp": "2025-01-01T00:00:00Z",
+        }
+        (journals_dir / "batch-fail.json").write_text(json.dumps(journal_data))
+        try:
+            results = run_recovery_all(state_dir=tmp_path)
+        finally:
+            ro_dir.chmod(0o700)
+        assert len(results) == 1
+        assert results[0].recovered is False
+        assert results[0].journal_id == "batch-fail"
+        assert results[0].error is not None
+        assert "Cannot restore" in results[0].error

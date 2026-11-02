@@ -10,16 +10,27 @@ Covers:
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path  # noqa: TC003
+from typing import TYPE_CHECKING
 
 import pytest
+import typer
 from pydantic import TypeAdapter
 from typer.testing import CliRunner
 
 from oc_selector import __version__
-from oc_selector.cli import app
+from oc_selector.cli import app, main
+from oc_selector.omo_upgrade import UpgradeResult
 from oc_selector.paths import resolve_config_parent
 from oc_selector.registry import ProfileEntry, Registry, load_registry, registry_to_toml
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from helpers.process_harness import ProcessHarness
+
+    from oc_selector.routing import NativeRoute
 
 runner = CliRunner()
 
@@ -48,6 +59,34 @@ def setup_registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return reg_path
 
 
+@pytest.fixture
+def omo_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
+    """Registry with an OMO-eligible profile plus an isolated HOME."""
+    config_dir = tmp_path / "xdg-config"
+    (config_dir / "oc-selector").mkdir(parents=True)
+    reg = Registry(
+        default_profile="work",
+        profiles={
+            "work": ProfileEntry(directory="work-dir", omo_profile="omo-work"),
+            "plain": ProfileEntry(directory="plain-dir"),
+        },
+    )
+    reg_path = config_dir / "oc-selector" / "config.toml"
+    reg_path.write_text(registry_to_toml(reg))
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_dir))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    return reg_path, home
+
+
+def _fake_isatty(_self: object) -> bool:
+    """Report a TTY so the prompt gate opens; stdin content is fed via input."""
+    return True
+
+
 class TestInitCommand:
     def test_happy_init(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
@@ -56,6 +95,46 @@ class TestInitCommand:
         result = runner.invoke(app, ["init"])
         assert result.exit_code == 0
         assert "Created" in result.output or "Already" in result.output
+
+    def test_happy_init_already_initialized(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+        monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+        first = runner.invoke(app, ["init"])
+        assert first.exit_code == 0
+        result = runner.invoke(app, ["init"])
+        assert result.exit_code == 0
+        assert "Already initialized." in result.output
+
+    def test_happy_init_dry_run_already_initialized(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+        monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+        first = runner.invoke(app, ["init"])
+        assert first.exit_code == 0
+        result = runner.invoke(app, ["init", "--dry-run"])
+        assert result.exit_code == 0
+        assert "Nothing to create (already initialized)." in result.output
+
+    def test_failure_init_unwritable_parent(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # XDG_CONFIG_HOME is a file, so the registry directory cannot be made.
+        blocker = tmp_path / "blocker"
+        blocker.write_text("i am a file")
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(blocker))
+        monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+        result = runner.invoke(app, ["init"])
+        assert result.exit_code == 2
+        assert "Cannot create registry" in result.output
 
 
 class TestListCommand:
@@ -87,6 +166,37 @@ class TestCreateCommand:
         result = runner.invoke(app, ["create", "default", "other-dir"])
         assert result.exit_code == 1
         assert "already exists" in result.output
+
+    def test_happy_create_prompted_directory(
+        self,
+        setup_registry: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr("typer.testing._NamedTextIOWrapper.isatty", _fake_isatty)
+        result = runner.invoke(app, ["create", "prompted"], input="prompted-dir\n")
+        assert result.exit_code == 0
+        assert (
+            load_registry(setup_registry).profiles["prompted"].directory
+            == "prompted-dir"
+        )
+
+    def test_failure_create_prompted_empty(
+        self,
+        setup_registry: Path,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # Whitespace-only input passes the prompt loop but fails the strip check.
+        monkeypatch.setattr("typer.testing._NamedTextIOWrapper.isatty", _fake_isatty)
+        result = runner.invoke(app, ["create", "prompted"], input="   \n")
+        assert result.exit_code == 2
+        assert "Directory cannot be empty." in result.output
+
+
+class TestEditCommand:
+    def test_failure_edit_not_found(self, setup_registry: Path) -> None:  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+        result = runner.invoke(app, ["edit", "ghost", "--directory", "ghost-dir"])
+        assert result.exit_code == 1
+        assert "Profile 'ghost' not found" in result.output
 
 
 class TestSetDefaultCommand:
@@ -127,6 +237,60 @@ class TestRecoverCommand:
         result = runner.invoke(app, ["init", "--recover"])
         assert result.exit_code == 0
         assert "No pending" in result.output
+
+    def test_happy_recover_pending(self, setup_registry: Path) -> None:
+        journals = setup_registry.parent / "journals"
+        journals.mkdir()
+        journal_data: dict[str, object] = {
+            "id": "rec-1",
+            "operation": "create",
+            "phase": "prepared",
+            "resources": [],
+            "affected_profiles": [],
+            "pid": 0,
+            "host": "test",
+            "timestamp": "2025-01-01T00:00:00Z",
+        }
+        (journals / "rec-1.json").write_text(json.dumps(journal_data))
+        result = runner.invoke(app, ["init", "--recover"])
+        assert result.exit_code == 0
+        assert "Recovered: rec-1" in result.output
+
+    def test_failure_recover_restore_error(
+        self,
+        setup_registry: Path,
+        tmp_path: Path,
+    ) -> None:
+        # The resource's parent directory is read-only, so the copy fails.
+        journals = setup_registry.parent / "journals"
+        journals.mkdir()
+        ro_dir = tmp_path / "ro"
+        ro_dir.mkdir()
+        (ro_dir / "target.bak").write_text("backup")
+        ro_dir.chmod(0o500)
+        journal_data: dict[str, object] = {
+            "id": "rec-fail",
+            "operation": "create",
+            "phase": "prepared",
+            "resources": [
+                {
+                    "path": str(ro_dir / "target"),
+                    "preimage_hash": "abc123",
+                    "existed": True,
+                },
+            ],
+            "affected_profiles": [],
+            "pid": 0,
+            "host": "test",
+            "timestamp": "2025-01-01T00:00:00Z",
+        }
+        (journals / "rec-fail.json").write_text(json.dumps(journal_data))
+        try:
+            result = runner.invoke(app, ["init", "--recover"])
+        finally:
+            ro_dir.chmod(0o700)
+        assert result.exit_code == 0
+        assert "Failed: rec-fail - Cannot restore" in result.output
 
 
 class TestListJson:
@@ -259,3 +423,231 @@ class TestSyncCommand:
         result = runner.invoke(app, ["sync", "default", "--all"])
         assert result.exit_code == 2
         assert "both PROFILE and --all" in result.output
+
+    def test_happy_sync_all_dry_run(self, setup_registry: Path) -> None:  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+        prof_dir = resolve_config_parent() / "default"
+        prof_dir.mkdir(parents=True, exist_ok=True)
+        (prof_dir / "package.json").write_text(
+            '{"name": "test-pkg", "version": "1.0.0"}',
+        )
+        result = runner.invoke(app, ["sync", "--all", "--dry-run"])
+        assert result.exit_code == 0
+        assert "default: Dry run: would sync test-pkg to latest" in result.output
+
+    def test_failure_sync_profile_not_found(self, setup_registry: Path) -> None:  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+        result = runner.invoke(app, ["sync", "ghost"])
+        assert result.exit_code == 2
+        assert "Profile 'ghost' not found" in result.output
+
+    def test_failure_sync_no_package(self, setup_registry: Path) -> None:  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+        (resolve_config_parent() / "default").mkdir(parents=True, exist_ok=True)
+        result = runner.invoke(app, ["sync", "default"])
+        assert result.exit_code == 1
+        error = "No package.json or pyproject.toml found"
+        msg = f"default: No host package detected ({error})"
+        assert msg in result.output
+
+
+class TestUpgradeOmo:
+    def test_failure_profile_and_all(self, omo_env: tuple[Path, Path]) -> None:  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+        result = runner.invoke(app, ["upgrade-omo", "work", "--all"])
+        assert result.exit_code == 2
+        assert "cannot specify both PROFILE and --all" in result.output
+
+    def test_happy_no_eligible(self, omo_env: tuple[Path, Path]) -> None:
+        reg_path, _ = omo_env
+        reg = Registry(
+            default_profile="plain",
+            profiles={"plain": ProfileEntry(directory="plain-dir")},
+        )
+        reg_path.write_text(registry_to_toml(reg))
+        result = runner.invoke(app, ["upgrade-omo", "--all"])
+        assert result.exit_code == 0
+        assert "No eligible profiles (none declare an OMO profile)." in result.output
+
+    def test_failure_profile_not_found(self, omo_env: tuple[Path, Path]) -> None:  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+        result = runner.invoke(app, ["upgrade-omo", "ghost"])
+        assert result.exit_code == 2
+        assert "Profile 'ghost' not found" in result.output
+
+    def test_failure_profile_without_omo(self, omo_env: tuple[Path, Path]) -> None:  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+        result = runner.invoke(app, ["upgrade-omo", "plain"])
+        assert result.exit_code == 2
+        assert (
+            "Profile 'plain' does not declare an OMO profile; nothing to upgrade"
+            in result.output
+        )
+
+    def test_failure_omo_config_missing(self, omo_env: tuple[Path, Path]) -> None:  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+        result = runner.invoke(app, ["upgrade-omo", "work", "--version", "1.2.3"])
+        assert result.exit_code == 2
+        assert "OMO config not found" in result.output
+
+    def test_failure_omo_config_invalid_json(self, omo_env: tuple[Path, Path]) -> None:
+        _, home = omo_env
+        (home / ".omo").write_text("{not json")
+        result = runner.invoke(app, ["upgrade-omo", "work", "--version", "1.2.3"])
+        assert result.exit_code == 2
+        assert "Invalid OMO config" in result.output
+
+    def test_failure_omo_config_not_object(self, omo_env: tuple[Path, Path]) -> None:
+        _, home = omo_env
+        (home / ".omo").write_text("[1, 2]")
+        result = runner.invoke(app, ["upgrade-omo", "work", "--version", "1.2.3"])
+        assert result.exit_code == 2
+        assert "expected a JSON object." in result.output
+
+    def test_failure_host_version_missing(self, omo_env: tuple[Path, Path]) -> None:
+        reg_path, home = omo_env
+        (home / ".omo").write_text('{"version": "1.0.0"}')
+        reg = Registry(
+            default_profile="work",
+            opencode_executable="ocx-missing",
+            profiles={
+                "work": ProfileEntry(directory="work-dir", omo_profile="omo-work"),
+            },
+        )
+        reg_path.write_text(registry_to_toml(reg))
+        result = runner.invoke(app, ["upgrade-omo", "work"])
+        assert result.exit_code == 2
+        assert (
+            "Cannot resolve host version from 'ocx-missing' (status: missing)."
+            in result.output
+        )
+
+    def test_failure_host_version_unsupported(
+        self,
+        omo_env: tuple[Path, Path],
+        monkeypatch: pytest.MonkeyPatch,
+        process_harness: ProcessHarness,
+        fixture_executable: Callable[..., Path],
+    ) -> None:
+        _, home = omo_env
+        (home / ".omo").write_text('{"version": "1.0.0"}')
+        fixture_executable("opencode", stdout="2.0.0\n")
+        monkeypatch.setenv("PATH", str(process_harness.bin_dir))
+        result = runner.invoke(app, ["upgrade-omo", "work"])
+        assert result.exit_code == 2
+        assert "Unsupported host version for maintenance: '2.0.0'" in result.output
+
+    def test_happy_explicit_version_dry_run(self, omo_env: tuple[Path, Path]) -> None:
+        _, home = omo_env
+        (home / ".omo").write_text('{"version": "1.0.0"}')
+        result = runner.invoke(
+            app,
+            ["upgrade-omo", "work", "--version", "1.2.3", "--dry-run"],
+        )
+        assert result.exit_code == 0
+        assert "Dry run: would upgrade from 1.0.0 to 1.2.3" in result.output
+        assert json.loads((home / ".omo").read_text())["version"] == "1.0.0"
+
+    def test_happy_host_resolved_version(
+        self,
+        omo_env: tuple[Path, Path],
+        monkeypatch: pytest.MonkeyPatch,
+        process_harness: ProcessHarness,
+        fixture_executable: Callable[..., Path],
+    ) -> None:
+        _, home = omo_env
+        (home / ".omo").write_text('{"version": "1.0.0"}')
+        fixture_executable("opencode", stdout="1.2.3\n")
+        monkeypatch.setenv("PATH", str(process_harness.bin_dir))
+        result = runner.invoke(app, ["upgrade-omo", "work"])
+        assert result.exit_code == 0
+        assert "Upgraded from 1.0.0 to 1.2.3" in result.output
+        assert json.loads((home / ".omo").read_text())["version"] == "1.2.3"
+
+    def test_happy_all_eligible(self, omo_env: tuple[Path, Path]) -> None:
+        _, home = omo_env
+        (home / ".omo").write_text('{"version": "1.0.0"}')
+        result = runner.invoke(
+            app,
+            ["upgrade-omo", "--all", "--version", "1.2.3", "--dry-run"],
+        )
+        assert result.exit_code == 0
+        assert "Dry run: would upgrade from 1.0.0 to 1.2.3" in result.output
+
+    def test_failure_upgrade_error(
+        self,
+        omo_env: tuple[Path, Path],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _, home = omo_env
+        (home / ".omo").write_text('{"version": "1.0.0"}')
+
+        def fake_upgrade(*_args: object, **_kwargs: object) -> UpgradeResult:
+            return UpgradeResult(
+                success=False,
+                from_version="1.0.0",
+                to_version="1.2.3",
+                message="Upgrade failed",
+                error="simulated lock timeout",
+            )
+
+        monkeypatch.setattr("oc_selector.cli.run_omo_upgrade", fake_upgrade)
+        result = runner.invoke(app, ["upgrade-omo", "work", "--version", "1.2.3"])
+        assert result.exit_code == 1
+        assert "simulated lock timeout" in result.output
+
+
+class TestMainDispatch:
+    def test_happy_management_route(
+        self,
+        setup_registry: Path,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(sys, "argv", ["oc-selector", "list"])
+        with pytest.raises(SystemExit) as excinfo:
+            main()
+        assert excinfo.value.code == 0
+
+    def test_failure_raw_no_registry(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # Contract: the raw path raises typer.Exit(2) uncaught (no click
+        # conversion), so the process exits 1 with a traceback today.
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "nonexistent"))
+        monkeypatch.setattr(sys, "argv", ["oc-selector", "run"])
+        with pytest.raises(typer.exceptions.Exit) as excinfo:
+            main()
+        assert excinfo.value.exit_code == 2
+
+    def test_happy_raw_dispatch(
+        self,
+        setup_registry: Path,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+        monkeypatch: pytest.MonkeyPatch,
+        process_harness: ProcessHarness,
+        fixture_executable: Callable[..., Path],
+    ) -> None:
+        fixture_executable("opencode", stdout="ok\n")
+        monkeypatch.setenv("PATH", str(process_harness.bin_dir))
+        routes: list[NativeRoute] = []
+
+        def fake_launch(
+            route: NativeRoute,
+            _registry: Registry,
+            *,
+            _dry_run: bool = False,
+        ) -> int:
+            routes.append(route)
+            return 0
+
+        monkeypatch.setattr("oc_selector.cli.launch_native", fake_launch)
+        monkeypatch.setattr(sys, "argv", ["oc-selector", "--model", "openai/gpt"])
+        main()
+        assert len(routes) == 1
+        assert routes[0].argv == ("--model", "openai/gpt")
+
+    def test_failure_raw_executable_missing(
+        self,
+        setup_registry: Path,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setenv("PATH", str(tmp_path / "empty"))
+        monkeypatch.setattr(sys, "argv", ["oc-selector", "run"])
+        with pytest.raises(typer.exceptions.Exit) as excinfo:
+            main()
+        assert excinfo.value.exit_code == 2
