@@ -412,6 +412,13 @@ class TestRouting:
         assert r.command == "create"
         assert r.args == ("newprofile",)
 
+    def test_happy_management_create_omo_profile(self) -> None:
+        reg = _make_registry()
+        r = route(["create", "a", "b", "--omo-profile", "x"], reg)
+        assert isinstance(r, ManagementRoute)
+        assert r.command == "create"
+        assert r.args == ("a", "b", "--omo-profile", "x")
+
     def test_happy_profile_tail_preserved(self) -> None:
         reg = _make_registry()
         r = route(["gpt", "--", "run", "--help"], reg)

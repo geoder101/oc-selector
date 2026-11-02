@@ -95,8 +95,9 @@ GRAMMAR_DOC = """\
 list [--json]
 info [--json]
 init [--no-backup] [--dry-run] [--recover]
-create NAME [DIRECTORY] [--model MODEL] [--no-interactive] [--dry-run]
-edit PROFILE [--directory DIR] [--model MODEL] [--dry-run]
+create NAME [DIRECTORY] [--model MODEL] [--omo-profile OMO_PROFILE] \
+[--no-interactive] [--dry-run]
+edit PROFILE [--directory DIR] [--model MODEL] [--omo-profile OMO_PROFILE] [--dry-run]
 set-default PROFILE [--dry-run]
 sync [PROFILE] [--all] [--dry-run]
 upgrade-omo [PROFILE] [--version VERSION] [--all] [--dry-run]
@@ -115,8 +116,14 @@ _GRAMMAR: dict[str, _CmdSpec] = {
     "list": _CmdSpec(frozenset({"--json"}), 0),
     "info": _CmdSpec(frozenset({"--json"}), 0),
     "init": _CmdSpec(frozenset({"--no-backup", "--dry-run", "--recover"}), 0),
-    "create": _CmdSpec(frozenset({"--model", "--no-interactive", "--dry-run"}), 2),
-    "edit": _CmdSpec(frozenset({"--directory", "--model", "--dry-run"}), 1),
+    "create": _CmdSpec(
+        frozenset({"--model", "--omo-profile", "--no-interactive", "--dry-run"}),
+        2,
+    ),
+    "edit": _CmdSpec(
+        frozenset({"--directory", "--model", "--omo-profile", "--dry-run"}),
+        1,
+    ),
     "set-default": _CmdSpec(frozenset({"--dry-run"}), 1),
     "sync": _CmdSpec(frozenset({"--all", "--dry-run"}), 1),
     "upgrade-omo": _CmdSpec(frozenset({"--version", "--all", "--dry-run"}), 1),
@@ -125,7 +132,7 @@ _GRAMMAR: dict[str, _CmdSpec] = {
 }
 
 _VALUE_FLAGS: frozenset[str] = frozenset(
-    {"--version", "--alias", "--model", "--directory"},
+    {"--version", "--alias", "--model", "--directory", "--omo-profile"},
 )
 
 

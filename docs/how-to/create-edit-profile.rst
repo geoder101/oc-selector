@@ -70,3 +70,21 @@ We preview an edit without writing:
 
     $ oc-selector edit work --directory other-dir --dry-run
     Dry run: would edit profile 'work' -> directory=other-dir, model=anthropic/claude-3
+
+Associate an OMO profile
+------------------------
+
+A profile can carry an OMO profile name with ``--omo-profile``. We set it at
+create time:
+
+.. code-block:: console
+
+    $ oc-selector create omo omo-dir --omo-profile standard
+    Created profile 'omo'
+
+Or change it later with ``edit``:
+
+.. code-block:: console
+
+    $ oc-selector edit omo --omo-profile minimal
+    Edited profile 'omo'

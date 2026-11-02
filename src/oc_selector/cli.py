@@ -184,11 +184,15 @@ def init(
 
 
 @app.command()
-def create(
+def create(  # noqa: PLR0913 - one parameter per CLI flag; the command surface is fixed.
     name: Annotated[str, typer.Argument(help="Profile name")],
     directory: Annotated[str | None, typer.Argument(help="Profile directory")] = None,
     *,
     model: Annotated[str | None, typer.Option("--model", "-m", help="Model ID")] = None,
+    omo_profile: Annotated[
+        str | None,
+        typer.Option("--omo-profile", help="OMO profile name"),
+    ] = None,
     no_interactive: Annotated[
         bool,
         typer.Option("--no-interactive", help="Do not prompt for the directory"),
@@ -212,7 +216,12 @@ def create(
         if not raw.strip():
             _error_exit("Directory cannot be empty.", code=2)
         directory = raw.strip()
-    inp = CreateProfileInput(name=name, directory=directory, model=model)
+    inp = CreateProfileInput(
+        name=name,
+        directory=directory,
+        model=model,
+        omo_profile=omo_profile,
+    )
     result = run_create_wizard(inp, registry_path(), state_root(), dry_run=dry_run)
     if result.success:
         typer.echo(result.message)
@@ -232,6 +241,10 @@ def edit(
         str | None,
         typer.Option("--model", "-m", help="New model ID"),
     ] = None,
+    omo_profile: Annotated[
+        str | None,
+        typer.Option("--omo-profile", help="New OMO profile name"),
+    ] = None,
     dry_run: Annotated[
         bool,
         typer.Option("--dry-run", help="Preview without writing"),
@@ -239,7 +252,12 @@ def edit(
 ) -> None:
     """Edit an existing profile."""
     _require_registry()
-    inp = EditProfileInput(name=name, directory=directory, model=model)
+    inp = EditProfileInput(
+        name=name,
+        directory=directory,
+        model=model,
+        omo_profile=omo_profile,
+    )
     result = run_edit_wizard(inp, registry_path(), state_root(), dry_run=dry_run)
     if result.success:
         typer.echo(result.message)

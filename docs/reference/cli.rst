@@ -28,8 +28,8 @@ The exact grammar, as printed by ``oc-selector help``:
     list [--json]
     info [--json]
     init [--no-backup] [--dry-run] [--recover]
-    create NAME [DIRECTORY] [--model MODEL] [--no-interactive] [--dry-run]
-    edit PROFILE [--directory DIR] [--model MODEL] [--dry-run]
+    create NAME [DIRECTORY] [--model MODEL] [--omo-profile OMO_PROFILE] [--no-interactive] [--dry-run]
+    edit PROFILE [--directory DIR] [--model MODEL] [--omo-profile OMO_PROFILE] [--dry-run]
     set-default PROFILE [--dry-run]
     sync [PROFILE] [--all] [--dry-run]
     upgrade-omo [PROFILE] [--version VERSION] [--all] [--dry-run]
@@ -98,7 +98,7 @@ create
 
 .. code-block:: text
 
-    oc-selector create NAME [DIRECTORY] [--model MODEL] [--no-interactive] [--dry-run]
+    oc-selector create NAME [DIRECTORY] [--model MODEL] [--omo-profile OMO_PROFILE] [--no-interactive] [--dry-run]
 
 Add a new profile. ``NAME`` is required; ``DIRECTORY`` is optional and, when
 omitted, is prompted for unless ``--no-interactive`` is set or stdin is not a
@@ -112,6 +112,7 @@ Arguments:
 Options:
 
 - ``--model``, ``-m`` — pin a model ID for the profile.
+- ``--omo-profile`` — associate an OMO profile name with the profile.
 - ``--no-interactive`` — do not prompt; ``DIRECTORY`` must be given.
 - ``--dry-run`` — preview without writing.
 
@@ -129,7 +130,7 @@ edit
 
 .. code-block:: text
 
-    oc-selector edit PROFILE [--directory DIR] [--model MODEL] [--dry-run]
+    oc-selector edit PROFILE [--directory DIR] [--model MODEL] [--omo-profile OMO_PROFILE] [--dry-run]
 
 Change fields of an existing profile. Only the fields that are named change; the
 rest are preserved.
@@ -142,6 +143,7 @@ Options:
 
 - ``--directory``, ``-d`` — new settings directory.
 - ``--model``, ``-m`` — new model ID.
+- ``--omo-profile`` — new OMO profile name.
 - ``--dry-run`` — preview without writing.
 
 .. code-block:: console

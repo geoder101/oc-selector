@@ -401,6 +401,65 @@ class TestEditFlags:
         )
 
 
+class TestOmoProfileFlag:
+    def test_create_omo_profile_stored(self, setup_registry: Path) -> None:
+        result = runner.invoke(
+            app,
+            ["create", "withomo", "wo-dir", "--omo-profile", "omo-a"],
+        )
+        assert result.exit_code == 0
+        assert load_registry(setup_registry).profiles["withomo"].omo_profile == "omo-a"
+
+    def test_create_without_omo_profile_null(self, setup_registry: Path) -> None:
+        result = runner.invoke(app, ["create", "plainprof", "pl-dir"])
+        assert result.exit_code == 0
+        assert load_registry(setup_registry).profiles["plainprof"].omo_profile is None
+
+    def test_edit_omo_profile_updates(self, setup_registry: Path) -> None:
+        runner.invoke(
+            app,
+            ["create", "editable", "ed-dir", "--omo-profile", "omo-old"],
+        )
+        result = runner.invoke(app, ["edit", "editable", "--omo-profile", "omo-new"])
+        assert result.exit_code == 0
+        assert (
+            load_registry(setup_registry).profiles["editable"].omo_profile == "omo-new"
+        )
+
+    def test_edit_without_omo_profile_preserves(self, setup_registry: Path) -> None:
+        runner.invoke(
+            app,
+            ["create", "editable", "ed-dir", "--omo-profile", "omo-keep"],
+        )
+        result = runner.invoke(app, ["edit", "editable", "--directory", "ed-dir2"])
+        assert result.exit_code == 0
+        reg = load_registry(setup_registry)
+        assert reg.profiles["editable"].omo_profile == "omo-keep"
+        assert reg.profiles["editable"].directory == "ed-dir2"
+
+    def test_create_omo_profile_dry_run_no_write(self, setup_registry: Path) -> None:
+        before = setup_registry.read_bytes()
+        result = runner.invoke(
+            app,
+            ["create", "dryprof", "dr-dir", "--omo-profile", "omo-x", "--dry-run"],
+        )
+        assert result.exit_code == 0
+        assert "would create" in result.output
+        assert setup_registry.read_bytes() == before
+
+    def test_list_json_shows_omo_profile(self, setup_registry: Path) -> None:  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+        runner.invoke(
+            app,
+            ["create", "withomo", "wo-dir", "--omo-profile", "omo-list"],
+        )
+        result = runner.invoke(app, ["list", "--json"])
+        assert result.exit_code == 0
+        payload = _PAYLOAD_ADAPTER.validate_python(json.loads(result.output))
+        profiles = _PROFILES_ADAPTER.validate_python(payload["profiles"])
+        entry = next(p for p in profiles if p["name"] == "withomo")
+        assert entry["omo_profile"] == "omo-list"
+
+
 class TestSetDefaultFlags:
     def test_happy_set_default_dry_run(self, setup_registry: Path) -> None:
         runner.invoke(app, ["create", "second", "second-dir"])
