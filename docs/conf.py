@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-project = "oc-selector"
+project = "OpenCode Selector"
+html_title = "OpenCode Selector"
 needs_sphinx = "9.0.0"
 extensions = ["autoapi.extension"]
 html_theme = "furo"

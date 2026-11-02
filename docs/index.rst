@@ -1,5 +1,5 @@
-oc-selector
-===========
+OpenCode Selector
+=================
 
 A cross-platform command that selects registered OpenCode settings while keeping
 normal OpenCode arguments intact.
