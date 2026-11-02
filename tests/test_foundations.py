@@ -20,6 +20,7 @@ from pydantic import TypeAdapter
 
 import oc_selector
 from oc_selector import cli, errors
+from oc_selector.paths import profile_directory
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -145,6 +146,14 @@ class TestIsolation:
             deny_personal_home.assert_isolated(
                 deny_personal_home.real_home / "evil.txt",
             )
+
+
+class TestPaths:
+    """Portable path resolution helpers."""
+
+    def test_happy_profile_directory(self) -> None:
+        """profile_directory joins the profile name under the config parent."""
+        assert profile_directory(Path("/cfg"), "work") == Path("/cfg/work")
 
 
 class TestSubprocessHarness:

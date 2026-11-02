@@ -25,6 +25,7 @@ from oc_selector.transactions import (
     JournalPhase,
     ResourceEntry,
     Transaction,
+    _fsync_dir,  # pyright: ignore[reportPrivateUsage]
     find_pending_journals,
     journal_to_dict,
     read_journal,
@@ -83,6 +84,82 @@ class TestTransactionLifecycle:
         # File should still have original content (rollback before commit)
         assert dst.read_text() == "original"
 
+    def test_happy_resources_property_returns_copy(
+        self,
+        state_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        """The resources property returns a defensive copy of tracked entries."""
+        tx = Transaction(state_root, operation="test")
+        tx.begin()
+        src = tmp_path / "source.txt"
+        src.write_text("hello")
+        dst = tmp_path / "dest.txt"
+        tx.stage_file(src, dst)
+        resources = tx.resources
+        assert len(resources) == 1
+        assert resources[0].path == str(dst)
+        assert resources[0].existed is False
+        resources.clear()
+        assert len(tx.resources) == 1
+        tx.rollback()
+
+    def test_happy_commit_skips_missing_staged_file(
+        self,
+        state_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        """Commit tolerates a lost staged file: the destination is not created."""
+        tx = Transaction(state_root, operation="test")
+        tx.begin()
+        src = tmp_path / "source.txt"
+        src.write_text("hello")
+        dst = tmp_path / "dest.txt"
+        tx.stage_file(src, dst)
+        # Simulate staging loss (partial crash) before commit.
+        (state_root / "staging" / tx.id / dst.name).unlink()
+        tx.commit()
+        assert tx.phase == JournalPhase.CLEANUP_COMPLETE
+        assert not dst.exists()
+
+    def test_happy_rollback_restores_backup(
+        self,
+        state_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        """Rollback restores the preimage from the private backup when present."""
+        dst = tmp_path / "existing.txt"
+        dst.write_text("original")
+        tx = Transaction(state_root, operation="test")
+        tx.begin()
+        src = tmp_path / "new.txt"
+        src.write_text("replacement")
+        tx.stage_file(src, dst)
+        backup_dir = state_root / "backups" / tx.id
+        backup_dir.mkdir(parents=True)
+        (backup_dir / dst.name).write_text("original")
+        # Simulate a partial apply: the destination now holds the new content.
+        dst.write_text("replacement")
+        tx.rollback()
+        assert dst.read_text() == "original"
+
+    def test_happy_rollback_removes_created_file(
+        self,
+        state_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        """Rollback unlinks a destination that did not exist before staging."""
+        tx = Transaction(state_root, operation="test")
+        tx.begin()
+        src = tmp_path / "new.txt"
+        src.write_text("fresh")
+        dst = tmp_path / "created.txt"
+        tx.stage_file(src, dst)
+        # Simulate a crash after a partial apply wrote the destination.
+        dst.write_text("fresh")
+        tx.rollback()
+        assert not dst.exists()
+
     def test_happy_lock_released_after_commit(
         self,
         state_root: Path,
@@ -133,6 +210,14 @@ class TestJournal:
     def test_happy_read_missing_journal(self, tmp_path: Path) -> None:
         result = read_journal(tmp_path / "nonexistent.json")
         assert result is None
+
+    def test_happy_read_invalid_journal_returns_none(self, state_root: Path) -> None:
+        """A journal file with invalid JSON is treated as unreadable (None)."""
+        journals = state_root / "journals"
+        journals.mkdir(parents=True)
+        bad = journals / "bad.json"
+        bad.write_text("{not json")
+        assert read_journal(bad) is None
 
     def test_golden_journal_bytes_exact_key_order(self, state_root: Path) -> None:
         """Golden write-side shape: raw journal file bytes pin the exact key order.
@@ -195,6 +280,13 @@ class TestPendingJournals:
         assert pending[0].operation == "test"
         tx.close()
 
+    def test_happy_ignores_non_json_files(self, state_root: Path) -> None:
+        """Non-.json files in the journals directory are ignored."""
+        journals = state_root / "journals"
+        journals.mkdir(parents=True)
+        (journals / "notes.txt").write_text("not a journal")
+        assert find_pending_journals(state_root) == []
+
 
 class TestPrivateModes:
     def test_happy_state_root_0700(self, state_root: Path) -> None:
@@ -233,3 +325,11 @@ class TestLockContention:
         with pytest.raises(MaintenanceError, match="lock"):
             tx2.begin()
         tx1.close()
+
+
+class TestFsyncDir:
+    """Directory fsync helper tolerates unsupported platforms."""
+
+    def test_happy_missing_path_swallowed(self, tmp_path: Path) -> None:
+        """An OSError from opening the directory is swallowed silently."""
+        assert _fsync_dir(tmp_path / "missing") is None

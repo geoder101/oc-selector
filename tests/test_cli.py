@@ -10,6 +10,7 @@ Covers:
 from __future__ import annotations
 
 import json
+import runpy
 import sys
 from pathlib import Path  # noqa: TC003
 from typing import TYPE_CHECKING
@@ -19,6 +20,7 @@ import typer
 from pydantic import TypeAdapter
 from typer.testing import CliRunner
 
+import oc_selector.cli as cli_module
 from oc_selector import __version__
 from oc_selector.cli import app, main
 from oc_selector.omo_upgrade import UpgradeResult
@@ -600,6 +602,21 @@ class TestMainDispatch:
         with pytest.raises(SystemExit) as excinfo:
             main()
         assert excinfo.value.code == 0
+
+    def test_happy_module_main_entry(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Running the module as __main__ calls main() and exits 2 with no registry."""
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "nonexistent"))
+        monkeypatch.setattr(sys, "argv", ["oc-selector", "list"])
+        with pytest.raises(SystemExit) as excinfo:
+            runpy.run_path(cli_module.__file__, run_name="__main__")
+        assert excinfo.value.code == 2
+        captured = capsys.readouterr()
+        assert "No registry found" in captured.err
 
     def test_failure_raw_no_registry(
         self,

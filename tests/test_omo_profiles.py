@@ -77,6 +77,43 @@ class TestLegacyConversion:
         )
         assert harness_agents["explore"]["permission"] == "allow"
 
+    def test_happy_agent_permission_only(self) -> None:
+        """An agent with only permission yields no models and no profile entry."""
+        inp = ConversionInput(
+            agents={"explore": {"permission": "deny"}},
+        )
+        result = convert_legacy_to_native("oc-selector-test", inp)
+        assert "agents" not in result.profiles_entry
+        harness_agents = _PERMISSION_MAP_ADAPTER.validate_python(
+            result.harness_entry["agents"],
+        )
+        assert harness_agents["explore"]["permission"] == "deny"
+
+    def test_happy_fallbacks_without_model(self) -> None:
+        """fallback_models alone produces the models list without a primary model."""
+        inp = ConversionInput(
+            agents={"build": {"fallback_models": ["p/m2", "p/m3"]}},
+        )
+        result = convert_legacy_to_native("oc-selector-test", inp)
+        agents = _MODEL_MAP_ADAPTER.validate_python(result.profiles_entry["agents"])
+        assert agents["build"]["models"] == ["p/m2", "p/m3"]
+
+    def test_happy_null_fallbacks_appended(self) -> None:
+        """An explicit null fallback_models is appended as None (legacy behavior)."""
+        inp = ConversionInput(
+            agents={"build": {"fallback_models": None}},
+        )
+        result = convert_legacy_to_native("oc-selector-test", inp)
+        assert result.profiles_entry["agents"] == {"build": {"models": [None]}}
+
+    def test_happy_empty_category_omitted(self) -> None:
+        """A category with no model fields is omitted from the profile entry."""
+        inp = ConversionInput(
+            categories={"quick": {}},
+        )
+        result = convert_legacy_to_native("oc-selector-test", inp)
+        assert "categories" not in result.profiles_entry
+
     def test_happy_multiple_agents(self) -> None:
         inp = ConversionInput(
             agents={
