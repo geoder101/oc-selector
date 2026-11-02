@@ -7,6 +7,10 @@ registry file format, the exit codes, and a glossary of terms.
 .. toctree::
    :maxdepth: 1
 
+   cli
+   registry
+   exit-codes
+   glossary
    api/oc_selector/index
 
 The generated :doc:`api/oc_selector/index` page documents the internal
