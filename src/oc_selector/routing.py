@@ -98,6 +98,7 @@ init [--no-backup] [--dry-run] [--recover]
 create NAME [DIRECTORY] [--model MODEL] [--omo-profile OMO_PROFILE] \
 [--no-interactive] [--dry-run]
 edit PROFILE [--directory DIR] [--model MODEL] [--omo-profile OMO_PROFILE] [--dry-run]
+delete PROFILE [--dry-run]
 set-default PROFILE [--dry-run]
 sync [PROFILE] [--all] [--dry-run]
 upgrade-omo [PROFILE] [--version VERSION] [--all] [--dry-run]
@@ -124,6 +125,7 @@ _GRAMMAR: dict[str, _CmdSpec] = {
         frozenset({"--directory", "--model", "--omo-profile", "--dry-run"}),
         1,
     ),
+    "delete": _CmdSpec(frozenset({"--dry-run"}), 1),
     "set-default": _CmdSpec(frozenset({"--dry-run"}), 1),
     "sync": _CmdSpec(frozenset({"--all", "--dry-run"}), 1),
     "upgrade-omo": _CmdSpec(frozenset({"--version", "--all", "--dry-run"}), 1),
@@ -185,7 +187,14 @@ def validate_management_args(command: str, args: tuple[str, ...]) -> None:  # no
 
     # Validate profile names in positionals
     for pos in positionals:
-        if command in ("create", "edit", "set-default", "sync", "upgrade-omo"):
+        if command in (
+            "create",
+            "edit",
+            "delete",
+            "set-default",
+            "sync",
+            "upgrade-omo",
+        ):
             try:
                 validate_profile_name(pos)
             except RegistryError as e:

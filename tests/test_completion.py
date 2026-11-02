@@ -105,6 +105,12 @@ class TestGenerateCompletion:
             assert "create" in script
             assert "set-default" in script
 
+    def test_happy_delete_in_all_shells(self) -> None:
+        reg = _make_registry()
+        for shell in ("bash", "zsh", "fish", "powershell"):
+            script = generate_completion(shell, reg)
+            assert "delete" in script
+
     def test_failure_unsupported_shell(self) -> None:
         reg = _make_registry()
         with pytest.raises(ArgumentError):

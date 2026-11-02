@@ -46,6 +46,7 @@ MANAGEMENT_NAMES: frozenset[str] = frozenset(
         "init",
         "create",
         "edit",
+        "delete",
         "set-default",
         "sync",
         "upgrade-omo",

@@ -53,6 +53,13 @@ class EditProfileInput:
 
 
 @dataclass(frozen=True, slots=True)
+class DeleteProfileInput:
+    """Typed input for registry-only profile deletion."""
+
+    name: str
+
+
+@dataclass(frozen=True, slots=True)
 class WizardResult:
     """Result of a wizard operation."""
 
@@ -290,6 +297,114 @@ def run_edit_wizard(
         success=True,
         profile_name=inp.name,
         message=f"Edited profile {inp.name!r}",
+    )
+
+
+def run_delete(  # noqa: PLR0911
+    inp: DeleteProfileInput,
+    registry_path: Path,
+    state_root: Path,
+    *,
+    dry_run: bool = False,
+) -> WizardResult:
+    """Run registry-only profile deletion.
+
+    Deletes ONLY the registry entry for a profile; never touches any profile
+    directory or ``~/.omo``. All mutations go through transaction.
+
+    Args:
+        inp: Typed delete input.
+        registry_path: Path to the registry file.
+        state_root: Path to the state root.
+        dry_run: When set, validate and report the would-be deletion without writing.
+
+    Returns:
+        A ``WizardResult`` describing the outcome.
+
+    """
+    # Load existing registry
+    try:
+        reg = load_registry(registry_path)
+    except RegistryError as exc:
+        return WizardResult(
+            success=False,
+            profile_name=inp.name,
+            message="Cannot load registry",
+            error=str(exc),
+        )
+
+    # Check profile exists
+    if inp.name not in reg.profiles:
+        return WizardResult(
+            success=False,
+            profile_name=inp.name,
+            message="Profile not found",
+            error=f"Profile {inp.name!r} not found",
+        )
+
+    # Refuse to delete the default profile
+    if inp.name == reg.default_profile:
+        return WizardResult(
+            success=False,
+            profile_name=inp.name,
+            message="Cannot delete default profile",
+            error=(
+                f"Cannot delete default profile {inp.name!r}; "
+                f"run 'oc-selector set-default <other>' first."
+            ),
+        )
+
+    # Refuse to delete the last remaining profile
+    if len(reg.profiles) == 1:
+        return WizardResult(
+            success=False,
+            profile_name=inp.name,
+            message="Cannot delete last remaining profile",
+            error=f"Cannot delete the last remaining profile {inp.name!r}.",
+        )
+
+    if dry_run:
+        return WizardResult(
+            success=True,
+            profile_name=inp.name,
+            message=f"Dry run: would delete profile {inp.name!r}",
+        )
+
+    # Use transaction for mutation
+    tx = Transaction(state_root, operation="delete")
+    try:
+        tx.begin()
+        remaining = {
+            name: entry for name, entry in reg.profiles.items() if name != inp.name
+        }
+        new_reg = Registry(
+            schema_version=reg.schema_version,
+            default_profile=reg.default_profile,
+            opencode_executable=reg.opencode_executable,
+            profiles=remaining,
+        )
+        new_toml = registry_to_toml(new_reg)
+        # Write to temp file, then stage it
+        tmp_file = state_root / "staging" / tx.id / "new_config.toml"
+        tmp_file.parent.mkdir(parents=True, exist_ok=True)
+        tmp_file.write_text(new_toml)
+        tx.stage_file(tmp_file, registry_path)
+        tx.commit()
+    except (OSError, RegistryError) as exc:
+        tx.rollback()
+        return WizardResult(
+            success=False,
+            profile_name=inp.name,
+            message="Transaction failed",
+            error=str(exc),
+        )
+    finally:
+        tx.close()
+
+    return WizardResult(
+        success=True,
+        profile_name=inp.name,
+        message=f"Deleted profile {inp.name!r}",
     )
 
 

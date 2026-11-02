@@ -43,8 +43,10 @@ from oc_selector.registry import Registry, load_registry
 from oc_selector.routing import GRAMMAR_DOC, ManagementRoute, route
 from oc_selector.wizard import (
     CreateProfileInput,
+    DeleteProfileInput,
     EditProfileInput,
     run_create_wizard,
+    run_delete,
     run_edit_wizard,
     run_set_default,
 )
@@ -277,6 +279,25 @@ def set_default_cmd(
     """Set the default profile (registry-only)."""
     _require_registry()
     result = run_set_default(name, registry_path(), state_root(), dry_run=dry_run)
+    if result.success:
+        typer.echo(result.message)
+    else:
+        _error_exit(result.error or result.message)
+
+
+@app.command()
+def delete(
+    name: Annotated[str, typer.Argument(help="Profile name")],
+    *,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Preview without writing"),
+    ] = False,
+) -> None:
+    """Delete a profile (registry entry only)."""
+    _require_registry()
+    inp = DeleteProfileInput(name=name)
+    result = run_delete(inp, registry_path(), state_root(), dry_run=dry_run)
     if result.success:
         typer.echo(result.message)
     else:

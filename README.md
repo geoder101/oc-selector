@@ -47,6 +47,7 @@ oc-selector --model openai/gpt-4 "fix the bug"
 | `oc-selector init [--no-backup] [--dry-run] [--recover]` | Initialize configuration and registry, or recover pending transactions |
 | `oc-selector create <name> [directory] [--model MODEL] [--omo-profile OMO_PROFILE] [--no-interactive] [--dry-run]` | Create a new profile |
 | `oc-selector edit <name> [--directory DIR] [--model MODEL] [--omo-profile OMO_PROFILE] [--dry-run]` | Edit an existing profile |
+| `oc-selector delete <name> [--dry-run]` | Delete a profile (registry entry only) |
 | `oc-selector set-default <name> [--dry-run]` | Set the default profile |
 | `oc-selector list [--json]` | List all registered profiles |
 | `oc-selector info [--json]` | Collect and display diagnostics |

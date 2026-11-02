@@ -18,9 +18,11 @@ from oc_selector.registry import ProfileEntry, Registry, load_registry, registry
 from oc_selector.transactions import Transaction
 from oc_selector.wizard import (
     CreateProfileInput,
+    DeleteProfileInput,
     EditProfileInput,
     WizardResult,
     run_create_wizard,
+    run_delete,
     run_edit_wizard,
     run_set_default,
 )
@@ -329,3 +331,84 @@ class TestSetDefault:
         assert registry_path.read_text() == original
         loaded = load_registry(registry_path)
         assert loaded.default_profile == "default"
+
+
+class TestDelete:
+    def test_happy_delete(self, registry_path: Path, state_root: Path) -> None:
+        run_create_wizard(
+            CreateProfileInput(name="second", directory="second-dir"),
+            registry_path,
+            state_root,
+        )
+        result = run_delete(
+            DeleteProfileInput(name="second"),
+            registry_path,
+            state_root,
+        )
+        assert result.success is True
+        assert result.message == "Deleted profile 'second'"
+
+    def test_failure_delete_not_found(
+        self,
+        registry_path: Path,
+        state_root: Path,
+    ) -> None:
+        result = run_delete(DeleteProfileInput(name="ghost"), registry_path, state_root)
+        assert result.success is False
+        assert result.error == "Profile 'ghost' not found"
+
+    def test_failure_delete_default(
+        self,
+        registry_path: Path,
+        state_root: Path,
+    ) -> None:
+        result = run_delete(
+            DeleteProfileInput(name="default"),
+            registry_path,
+            state_root,
+        )
+        assert result.success is False
+        expected = (
+            "Cannot delete default profile 'default'; "
+            "run 'oc-selector set-default <other>' first."
+        )
+        assert result.error == expected
+
+    def test_happy_delete_dry_run(self, registry_path: Path, state_root: Path) -> None:
+        run_create_wizard(
+            CreateProfileInput(name="second", directory="second-dir"),
+            registry_path,
+            state_root,
+        )
+        before = registry_path.read_bytes()
+        result = run_delete(
+            DeleteProfileInput(name="second"),
+            registry_path,
+            state_root,
+            dry_run=True,
+        )
+        assert result.success is True
+        assert result.message == "Dry run: would delete profile 'second'"
+        assert registry_path.read_bytes() == before
+
+    def test_failure_delete_last_remaining(
+        self,
+        registry_path: Path,
+        state_root: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Reach the defensive last-remaining branch via an injected registry."""
+        bad = Registry.model_construct(
+            schema_version=1,
+            default_profile="other",
+            opencode_executable="opencode",
+            profiles={"only": ProfileEntry(directory="d")},
+        )
+
+        def _fake_load(_p: Path) -> Registry:
+            return bad
+
+        monkeypatch.setattr("oc_selector.wizard.load_registry", _fake_load)
+        result = run_delete(DeleteProfileInput(name="only"), registry_path, state_root)
+        assert result.success is False
+        assert result.error == "Cannot delete the last remaining profile 'only'."

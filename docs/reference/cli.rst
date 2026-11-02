@@ -30,6 +30,7 @@ The exact grammar, as printed by ``oc-selector help``:
     init [--no-backup] [--dry-run] [--recover]
     create NAME [DIRECTORY] [--model MODEL] [--omo-profile OMO_PROFILE] [--no-interactive] [--dry-run]
     edit PROFILE [--directory DIR] [--model MODEL] [--omo-profile OMO_PROFILE] [--dry-run]
+    delete PROFILE [--dry-run]
     set-default PROFILE [--dry-run]
     sync [PROFILE] [--all] [--dry-run]
     upgrade-omo [PROFILE] [--version VERSION] [--all] [--dry-run]
@@ -47,6 +48,8 @@ Command summary
 | ``create``     | Add a new profile                                    |
 +----------------+------------------------------------------------------+
 | ``edit``       | Change fields of an existing profile                 |
++----------------+------------------------------------------------------+
+| ``delete``     | Remove a profile from the registry                   |
 +----------------+------------------------------------------------------+
 | ``set-default``| Set the default profile                              |
 +----------------+------------------------------------------------------+
@@ -153,6 +156,42 @@ Options:
 
 Exit codes: 0 on success; 2 when the registry is absent; 1 when the profile does
 not exist or a field is invalid.
+
+delete
+------
+
+.. code-block:: text
+
+    oc-selector delete PROFILE [--dry-run]
+
+Delete a profile from the registry. This removes only the registry entry; it
+never removes the profile's settings directory or touches ``~/.omo``.
+
+Arguments:
+
+- ``PROFILE`` (required) — the profile to delete.
+
+Options:
+
+- ``--dry-run`` — preview without writing.
+
+.. code-block:: console
+
+    $ oc-selector delete old-profile
+    Deleted profile 'old-profile'
+
+Refusals (exit 1):
+
+- The profile is the current default:
+  ``Cannot delete default profile '<name>'; run 'oc-selector set-default <other>' first.``
+- The profile is the last remaining one:
+  ``Cannot delete the last remaining profile '<name>'.``
+
+A profile that does not exist is also refused (exit 1):
+``Profile '<name>' not found``
+
+Exit codes: 0 on success; 1 when the profile is not found or the deletion is
+refused; 2 when the registry is absent.
 
 set-default
 -----------

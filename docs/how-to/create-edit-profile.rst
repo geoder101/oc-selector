@@ -88,3 +88,30 @@ Or change it later with ``edit``:
 
     $ oc-selector edit omo --omo-profile minimal
     Edited profile 'omo'
+
+Delete a profile
+----------------
+
+We remove a profile from the registry. The settings directory and any OMO
+config are left untouched:
+
+.. code-block:: console
+
+    $ oc-selector delete old-profile
+    Deleted profile 'old-profile'
+
+Two refusals (exit 1):
+
+- You cannot delete the current default profile. Set a different default first:
+
+  .. code-block:: console
+
+      $ oc-selector delete work
+      Cannot delete default profile 'work'; run 'oc-selector set-default <other>' first.
+
+- You cannot delete the last remaining profile:
+
+  .. code-block:: console
+
+      $ oc-selector delete default
+      Cannot delete the last remaining profile 'default'.

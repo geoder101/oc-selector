@@ -26,6 +26,7 @@ _MANAGEMENT_COMMANDS: tuple[str, ...] = (
     "init",
     "create",
     "edit",
+    "delete",
     "set-default",
     "sync",
     "upgrade-omo",
@@ -98,7 +99,7 @@ _{cmd}_completions() {{
     fi
 
     case "${{COMP_WORDS[1]}}" in
-        create|edit|set-default|sync|upgrade-omo)
+        create|edit|delete|set-default|sync|upgrade-omo)
             COMPREPLY=( $(compgen -W "{profile_list}" -- "$cur") )
             ;;
         completion)
@@ -130,7 +131,7 @@ _{cmd}_completions() {{
     fi
 
     case "${{words[2]}}" in
-        create|edit|set-default|sync|upgrade-omo)
+        create|edit|delete|set-default|sync|upgrade-omo)
             compadd -W "{profile_list}"
             ;;
         completion)
@@ -153,7 +154,7 @@ def _fish_script(cmd: str, profiles: list[str]) -> str:
     )
     lines.extend(
         f'complete -c {cmd} -n "__fish_seen_subcommand_from {c}" -w "{profile_list}"'
-        for c in ("create", "edit", "set-default", "sync", "upgrade-omo")
+        for c in ("create", "edit", "delete", "set-default", "sync", "upgrade-omo")
     )
     lines.append(
         f'complete -c {cmd} -n "__fish_seen_subcommand_from completion" -w "bash zsh fish powershell"',
@@ -178,6 +179,7 @@ Register-ArgumentCompleter -Native -CommandName "{cmd}" {{
         switch ($words[1]) {{
             "create" {{ @("{profile_list}".Split(' ')) | Where-Object {{ $_ -like "$wordToComplete*" }} | ForEach-Object {{ [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }} }}
             "edit" {{ @("{profile_list}".Split(' ')) | Where-Object {{ $_ -like "$wordToComplete*" }} | ForEach-Object {{ [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }} }}
+            "delete" {{ @("{profile_list}".Split(' ')) | Where-Object {{ $_ -like "$wordToComplete*" }} | ForEach-Object {{ [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }} }}
             "set-default" {{ @("{profile_list}".Split(' ')) | Where-Object {{ $_ -like "$wordToComplete*" }} | ForEach-Object {{ [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }} }}
             "completion" {{ @("bash","zsh","fish","powershell") | Where-Object {{ $_ -like "$wordToComplete*" }} | ForEach-Object {{ [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }} }}
         }}

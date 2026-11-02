@@ -201,6 +201,35 @@ class TestEditCommand:
         assert "Profile 'ghost' not found" in result.output
 
 
+class TestDelete:
+    def test_happy_delete(self, setup_registry: Path) -> None:  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+        runner.invoke(app, ["create", "second", "second-dir"])
+        result = runner.invoke(app, ["delete", "second"])
+        assert result.exit_code == 0
+        assert "Deleted profile 'second'" in result.output
+
+    def test_failure_delete_not_found(self, setup_registry: Path) -> None:  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+        result = runner.invoke(app, ["delete", "ghost"])
+        assert result.exit_code == 1
+        assert "Profile 'ghost' not found" in result.output
+
+    def test_failure_delete_default(self, setup_registry: Path) -> None:  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+        result = runner.invoke(app, ["delete", "default"])
+        assert result.exit_code == 1
+        assert (
+            "Cannot delete default profile 'default'; "
+            "run 'oc-selector set-default <other>' first."
+        ) in result.output
+
+    def test_happy_delete_dry_run(self, setup_registry: Path) -> None:
+        runner.invoke(app, ["create", "second", "second-dir"])
+        before = setup_registry.read_bytes()
+        result = runner.invoke(app, ["delete", "second", "--dry-run"])
+        assert result.exit_code == 0
+        assert "Dry run: would delete profile 'second'" in result.output
+        assert setup_registry.read_bytes() == before
+
+
 class TestSetDefaultCommand:
     def test_happy_set_default(self, setup_registry: Path) -> None:  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
         # Create a second profile first
