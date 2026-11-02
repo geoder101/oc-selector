@@ -81,6 +81,10 @@ output = "coverage/coverage.json"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = ["-ra", "--strict-config", "--strict-markers"]
+# Fail the suite on any unhandled Python warning (including ResourceWarning and
+# unraisable exceptions). Every warning must be fixed at its source; a precise
+# filter below is only acceptable for an unavoidable third-party warning.
+filterwarnings = ["error"]
 markers = [
     "real_runtime: tests requiring real pinned runtime (VM only)",
     "console: tests requiring terminal/pty interaction",

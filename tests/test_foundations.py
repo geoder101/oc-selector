@@ -228,7 +228,8 @@ class TestSubprocessHarness:
             sys.executable,
             str(child),
         ]
-        result = ProcessHarness().run(argv)
+        with ProcessHarness() as harness:
+            result = harness.run(argv)
         assert result.exit_code == 0
         text = evidence.read_text(encoding="utf-8")
         assert "expectation: matched" in text
