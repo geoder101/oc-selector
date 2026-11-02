@@ -82,11 +82,8 @@ def run_init(
     Args:
         config_parent: Override config parent path (for testing).
         registry_path: Override registry path (for testing).
-        no_backup: Accepted for grammar parity. Generic init only creates missing
-            resources and never rewrites existing state, so it performs no backup;
-            this flag is therefore intentionally inert here.
-        dry_run: When set, write nothing and instead report what *would* be created;
-            ``created_parent``/``created_registry`` reflect the would-be outcome.
+        no_backup: Accepted for grammar parity; generic init performs no backup.
+        dry_run: When set, write nothing and report the would-be outcome.
 
     Returns:
         An ``InitResult`` describing what was (or would be) created.

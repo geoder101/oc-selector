@@ -1,6 +1,7 @@
 """Recoverable transactions with private backups and cross-platform locks.
 
 Contract:
+
 - One portalocker exclusive lock at state root protects every mutation AND
   launch admission.
 - Bounded 5-second acquisition.

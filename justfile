@@ -50,8 +50,8 @@ cli *args:
 build:
     uv build
 
-# The single gate: lock-check, format-check, lint, typecheck, test, build.
-check: lock-check format-check lint typecheck test build
+# The single gate: lock-check, format-check, lint, typecheck, test, docs-check, build.
+check: lock-check format-check lint typecheck test docs-check build
 
 # Run coverage exploratorily, forwarding any extra arguments to pytest (no threshold).
 coverage *args:
@@ -60,3 +60,12 @@ coverage *args:
 # Run the fresh full-suite combined coverage gate at the fixed 90% threshold.
 coverage-check:
     uv run python -m tools.coverage_gate
+
+# Build the docs site strictly: a clean build, then a -W HTML build that fails on any warning.
+docs-check:
+    uv run --group docs sphinx-build -M clean docs docs/_build
+    uv run --group docs sphinx-build -M html docs docs/_build -E -a -W
+
+# Build the docs site, then serve the HTML output on the given port (default 8000).
+docs-preview port="8000": docs-check
+    python -m http.server --directory docs/_build/html {{port}}

@@ -110,8 +110,7 @@ def run_omo_upgrade(
         schema: The target schema.
         state_root: Path to the state root.
         new_config: New config content (None for in-place validation).
-        dry_run: When set with a ``new_config``, validate and report the
-            would-be upgrade without writing the config or a transaction.
+        dry_run: With a ``new_config``, validate and report without writing.
 
     Returns:
         An ``UpgradeResult`` describing the outcome.

@@ -1,6 +1,7 @@
 """Parameterized legacy conversion and modern native projections.
 
 Conversion contract:
+
 - Installed conversion helpers accept typed model IDs, profile/native names,
   plugin pins and field policies as parameters.
 - No author model/provider/name defaults or recipe resources in installed src.
@@ -13,6 +14,7 @@ Conversion contract:
 - Unknown unsupported fields fail before commit, not silently discarded.
 
 Modern projection:
+
 - Separate from legacy conversion.
 - Singleton models across covered existing supported roster.
 - Preserve permissions/hooks/non-models.

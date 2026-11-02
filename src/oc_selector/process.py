@@ -1,6 +1,7 @@
 """Raw dispatch and POSIX/Windows native process launcher.
 
 Launch contract:
+
 - Resolve to one absolute executable, use POSIX execve (no second PATH lookup).
 - Windows: supervised subprocess with inherited stdio/cwd.
 - Reject own wrapper file identity including links.
@@ -82,8 +83,8 @@ def build_launch_env(
     - Always set OPENCODE_CONFIG_DIR to exact selected directory.
     - Unmanaged (no omo_profile): preserve inherited OMO_PROFILE AND OCX_PROFILE.
     - Owned (has omo_profile): set OMO_PROFILE, clear OCX_PROFILE.
-    - Retain OPENCODE_CONFIG, OPENCODE_CONFIG_CONTENT, OPENCODE_TUI_CONFIG,
-      cwd, stdio, HOME/USERPROFILE, data/cache/state and auth.
+    - Retain OPENCODE_CONFIG, OPENCODE_CONFIG_CONTENT, OPENCODE_TUI_CONFIG.
+    - Retain cwd, stdio, HOME/USERPROFILE, data/cache/state and auth.
     """
     env = dict(base_env) if base_env else dict(os.environ)
     parent = resolve_config_parent()

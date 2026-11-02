@@ -132,8 +132,7 @@ def sync_host_package(
         project_root: Path to the project root.
         state_root: Path to the state root.
         target_version: Target version (None for latest).
-        dry_run: When set, report the would-be sync without running the package
-            manager or writing a transaction.
+        dry_run: When set, report the would-be sync without running it.
 
     Returns:
         A ``SyncResult`` describing the outcome.

@@ -59,6 +59,9 @@ ignore = ["CPY001", "TRY003", "EM101", "EM102"]
 "tools/verify.py" = ["S603", "S607", "S108", "INP001"]
 # Shell completion scripts are inherently long single-line constructs.
 "src/oc_selector/completion.py" = ["E501"]
+# docs/conf.py is a Sphinx config file, not a package module; docs/ has no
+# __init__.py by design, so the implicit-namespace-package check is a false positive.
+"docs/conf.py" = ["INP001"]
 
 [tool.coverage.run]
 branch = true
