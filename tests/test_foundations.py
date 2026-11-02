@@ -11,6 +11,7 @@ import json
 import os
 import sys
 import tomllib
+from importlib.metadata import version
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -30,6 +31,7 @@ if TYPE_CHECKING:
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 _SCRIPTS_ADAPTER: TypeAdapter[dict[str, str]] = TypeAdapter(dict[str, str])
+_VERSION_ADAPTER: TypeAdapter[str] = TypeAdapter(str)
 _ERROR_CLASS_ADAPTER: TypeAdapter[type[errors.OcSelectorError]] = TypeAdapter(
     type[errors.OcSelectorError],
 )
@@ -73,6 +75,15 @@ class TestPackaging:
         assert len(parts) == 3
         for part in parts:
             assert part.isdigit()
+
+    def test_happy_version_matches_declared_version(self) -> None:
+        """__version__ and the installed metadata match pyproject.toml."""
+        pyproject = _PROJECT_ROOT / "pyproject.toml"
+        with pyproject.open("rb") as handle:
+            data = tomllib.load(handle)
+        declared = _VERSION_ADAPTER.validate_python(data["project"]["version"])
+        assert version("oc-selector") == declared
+        assert oc_selector.__version__ == declared
 
     def test_happy_entrypoint_is_callable(self) -> None:
         """The console-script target oc_selector.cli.main exists and is callable."""
