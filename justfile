@@ -7,6 +7,9 @@ set shell := ["sh", "-cu"]
 [windows]
 set shell := ["powershell.exe", "-NoLogo", "-Command"]
 
+# Pin coverage data under coverage/ for the coverage recipes (inert elsewhere).
+export COVERAGE_FILE := "coverage/.coverage"
+
 # Show this list of recipes (the default action).
 default:
     just --list
@@ -49,3 +52,11 @@ build:
 
 # The single gate: lock-check, format-check, lint, typecheck, test, build.
 check: lock-check format-check lint typecheck test build
+
+# Run coverage exploratorily, forwarding any extra arguments to pytest (no threshold).
+coverage *args:
+    uv run pytest --cov=oc_selector --cov-branch --cov-config=pyproject.toml --cov-report=term-missing --cov-report=html --cov-report=json {{args}}
+
+# Run the fresh full-suite combined coverage gate at the fixed 90% threshold.
+coverage-check:
+    uv run python -m tools.coverage_gate
