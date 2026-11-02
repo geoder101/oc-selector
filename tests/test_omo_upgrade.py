@@ -23,6 +23,7 @@ from oc_selector.omo_upgrade import (
     run_omo_upgrade,
     validate_omo_config,
 )
+from oc_selector.transactions import Transaction
 
 _CONFIG_ADAPTER: TypeAdapter[dict[str, object]] = TypeAdapter(dict[str, object])
 
@@ -42,6 +43,18 @@ def valid_config(tmp_path: Path) -> Path:  # noqa: D103
     path = tmp_path / "omo.json"
     path.write_text(json.dumps(config))
     return path
+
+
+@pytest.fixture
+def block_commit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make ``Transaction.commit`` raise ``OSError`` to simulate a failed apply."""
+
+    def _raise(
+        self: Transaction,  # noqa: ARG001  # pyright: ignore[reportUnusedParameter]
+    ) -> None:
+        raise OSError("simulated commit failure")
+
+    monkeypatch.setattr(Transaction, "commit", _raise)
 
 
 class TestValidateOmoConfig:
@@ -70,6 +83,16 @@ class TestValidateOmoConfig:
         path = tmp_path / "wrong_version.json"
         path.write_text(json.dumps({"version": "2.0.0", "name": "test"}))
         with pytest.raises(SchemaValidationError, match="Version mismatch"):
+            validate_omo_config(path, schema)
+
+    def test_failure_json_not_object(self, tmp_path: Path, schema: OmoSchema) -> None:
+        """Validation rejects valid JSON that is not an object."""
+        path = tmp_path / "array.json"
+        path.write_text(json.dumps([1, 2]))
+        with pytest.raises(
+            SchemaValidationError,
+            match="Config must be a JSON object",
+        ):
             validate_omo_config(path, schema)
 
 
@@ -127,3 +150,75 @@ class TestRunOmoUpgrade:
         r2 = run_omo_upgrade(valid_config, schema, state_root)
         assert r1.success is True
         assert r2.success is True
+
+    def test_failure_invalid_json_existing_config(
+        self,
+        tmp_path: Path,
+        schema: OmoSchema,
+    ) -> None:
+        """Unparseable config yields from_version 'unknown' and 'Validation failed'."""
+        config_path = tmp_path / "omo.json"
+        config_path.write_text("not json")
+        state_root = tmp_path / "state"
+        state_root.mkdir()
+        result = run_omo_upgrade(config_path, schema, state_root)
+        assert result.success is False
+        assert result.from_version == "unknown"
+        assert result.to_version == "1.0.0"
+        assert result.message == "Validation failed"
+        assert result.error is not None
+        assert "Invalid JSON" in result.error
+
+    def test_failure_missing_config_file(
+        self,
+        tmp_path: Path,
+        schema: OmoSchema,
+    ) -> None:
+        """Missing config yields from_version 'unknown' and 'Validation failed'."""
+        state_root = tmp_path / "state"
+        state_root.mkdir()
+        result = run_omo_upgrade(tmp_path / "missing.json", schema, state_root)
+        assert result.success is False
+        assert result.from_version == "unknown"
+        assert result.to_version == "1.0.0"
+        assert result.message == "Validation failed"
+        assert result.error is not None
+        assert "not found" in result.error
+
+    def test_failure_version_mismatch_existing_config(
+        self,
+        tmp_path: Path,
+        schema: OmoSchema,
+    ) -> None:
+        """Version mismatch yields the actual from_version and 'Validation failed'."""
+        config_path = tmp_path / "omo.json"
+        config_path.write_text(json.dumps({"version": "2.0.0", "name": "test-omo"}))
+        state_root = tmp_path / "state"
+        state_root.mkdir()
+        result = run_omo_upgrade(config_path, schema, state_root)
+        assert result.success is False
+        assert result.from_version == "2.0.0"
+        assert result.to_version == "1.0.0"
+        assert result.message == "Validation failed"
+        assert result.error is not None
+        assert "Version mismatch" in result.error
+
+    def test_failure_commit_error_rolls_back(
+        self,
+        valid_config: Path,
+        schema: OmoSchema,
+        tmp_path: Path,
+        block_commit: None,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+    ) -> None:
+        """Commit failure yields 'Upgrade failed' and leaves the config unchanged."""
+        state_root = tmp_path / "state"
+        state_root.mkdir()
+        original = valid_config.read_text()
+        new_config: dict[str, object] = {"version": "1.0.0", "name": "updated-omo"}
+        result = run_omo_upgrade(valid_config, schema, state_root, new_config)
+        assert result.success is False
+        assert result.from_version == "1.0.0"
+        assert result.to_version == "1.0.0"
+        assert result.message == "Upgrade failed"
+        assert result.error is not None
+        assert valid_config.read_text() == original

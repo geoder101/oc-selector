@@ -15,6 +15,7 @@ from pathlib import Path  # noqa: TC003
 import pytest
 
 from oc_selector.registry import ProfileEntry, Registry, load_registry, registry_to_toml
+from oc_selector.transactions import Transaction
 from oc_selector.wizard import (
     CreateProfileInput,
     EditProfileInput,
@@ -43,6 +44,18 @@ def state_root(tmp_path: Path) -> Path:
     root = tmp_path / "state"
     root.mkdir()
     return root
+
+
+@pytest.fixture
+def block_commit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make ``Transaction.commit`` raise ``OSError`` to simulate a failed apply."""
+
+    def _raise(
+        self: Transaction,  # noqa: ARG001  # pyright: ignore[reportUnusedParameter]
+    ) -> None:
+        raise OSError("simulated commit failure")
+
+    monkeypatch.setattr(Transaction, "commit", _raise)
 
 
 class TestCreateWizard:
@@ -101,6 +114,43 @@ class TestCreateWizard:
         )
         result = run_create_wizard(inp, registry_path, state_root)
         assert result.success is False
+
+    def test_failure_cannot_load_registry_invalid_toml(
+        self,
+        tmp_path: Path,
+        state_root: Path,
+    ) -> None:
+        """Create wizard fails with 'Cannot load registry' on unparseable TOML."""
+        registry_path = tmp_path / "config.toml"
+        registry_path.write_text("this is not toml [[[")
+        inp = CreateProfileInput(
+            name="new-profile",
+            directory="dir",
+        )
+        result = run_create_wizard(inp, registry_path, state_root)
+        assert result.success is False
+        assert result.message == "Cannot load registry"
+        assert result.error is not None
+
+    def test_failure_transaction_commit_error(
+        self,
+        registry_path: Path,
+        state_root: Path,
+        block_commit: None,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+    ) -> None:
+        """Commit failure yields 'Transaction failed' and leaves registry intact."""
+        original = registry_path.read_text()
+        inp = CreateProfileInput(
+            name="new-profile",
+            directory="dir",
+        )
+        result = run_create_wizard(inp, registry_path, state_root)
+        assert result.success is False
+        assert result.message == "Transaction failed"
+        assert result.error is not None
+        assert registry_path.read_text() == original
+        reg = load_registry(registry_path)
+        assert "new-profile" not in reg.profiles
 
 
 class TestEditWizard:
@@ -162,6 +212,51 @@ class TestEditWizard:
         result = run_edit_wizard(inp, registry_path, state_root)
         assert result.success is False
 
+    def test_failure_cannot_load_registry_bad_default(
+        self,
+        tmp_path: Path,
+        state_root: Path,
+    ) -> None:
+        """Edit wizard fails with 'Cannot load registry' when default is missing."""
+        registry_path = tmp_path / "config.toml"
+        registry_path.write_text(
+            """\
+schema_version = 1
+default_profile = "missing"
+
+[profiles.default]
+directory = "default"
+""",
+        )
+        inp = EditProfileInput(
+            name="default",
+            directory="new-dir",
+        )
+        result = run_edit_wizard(inp, registry_path, state_root)
+        assert result.success is False
+        assert result.message == "Cannot load registry"
+        assert result.error is not None
+
+    def test_failure_transaction_commit_error(
+        self,
+        registry_path: Path,
+        state_root: Path,
+        block_commit: None,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+    ) -> None:
+        """Commit failure yields 'Transaction failed' and leaves registry intact."""
+        original = registry_path.read_text()
+        inp = EditProfileInput(
+            name="default",
+            directory="new-dir",
+        )
+        result = run_edit_wizard(inp, registry_path, state_root)
+        assert result.success is False
+        assert result.message == "Transaction failed"
+        assert result.error is not None
+        assert registry_path.read_text() == original
+        reg = load_registry(registry_path)
+        assert reg.profiles["default"].directory == "default"
+
 
 class TestSetDefault:
     def test_happy_set_default(self, registry_path: Path, state_root: Path) -> None:
@@ -196,3 +291,41 @@ class TestSetDefault:
         assert result.success is True
         reg = load_registry(registry_path)
         assert reg.default_profile == "default"
+
+    def test_failure_cannot_load_registry_invalid_toml(
+        self,
+        tmp_path: Path,
+        state_root: Path,
+    ) -> None:
+        """Set-default fails with 'Cannot load registry' on unparseable TOML."""
+        registry_path = tmp_path / "config.toml"
+        registry_path.write_text("not toml at all {{{")
+        result = run_set_default("default", registry_path, state_root)
+        assert result.success is False
+        assert result.message == "Cannot load registry"
+        assert result.error is not None
+
+    def test_failure_transaction_commit_error(
+        self,
+        tmp_path: Path,
+        state_root: Path,
+        block_commit: None,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+    ) -> None:
+        """Commit failure yields 'Transaction failed' and leaves registry intact."""
+        reg = Registry(
+            default_profile="default",
+            profiles={
+                "default": ProfileEntry(directory="default"),
+                "second": ProfileEntry(directory="second-dir"),
+            },
+        )
+        registry_path = tmp_path / "config.toml"
+        registry_path.write_text(registry_to_toml(reg))
+        original = registry_path.read_text()
+        result = run_set_default("second", registry_path, state_root)
+        assert result.success is False
+        assert result.message == "Transaction failed"
+        assert result.error is not None
+        assert registry_path.read_text() == original
+        loaded = load_registry(registry_path)
+        assert loaded.default_profile == "default"
