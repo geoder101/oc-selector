@@ -12,11 +12,11 @@ command unchanged.
 Installation
 ------------
 
-.. code-block:: bash
+From a local clone of the repository (run at the repo root)::
 
-    pip install oc-selector
+    uv tool install .   # recommended: isolated tool environment
     # or
-    uv tool install oc-selector
+    pip install .
 
 Quick start
 -----------

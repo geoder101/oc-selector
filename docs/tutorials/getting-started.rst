@@ -15,13 +15,14 @@ invocation picks it up.
 Install
 -------
 
-We install oc-selector with pip or uv:
+We install oc-selector from a local clone of the repository (run at the repo
+root) with pip or uv:
 
 .. code-block:: console
 
-    $ pip install oc-selector
+    $ uv tool install .   # recommended: isolated tool environment
     # or
-    $ uv tool install oc-selector
+    $ pip install .
 
 Initialize
 ----------
