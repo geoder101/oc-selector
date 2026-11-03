@@ -24,6 +24,9 @@ just docs-check    # strict (-W) Sphinx docs build (pip-only, no Node/TeX)
 just docs-preview <port>  # build, then serve the docs site on <port>
 just coverage <args>  # coverage run (exploratory, no threshold)
 just coverage-check   # the fresh full-suite combined coverage gate (90% threshold)
+just completion-e2e-image   # build the completion e2e image (one-time, network)
+just completion-e2e-tests   # run the container-gated completion e2e (needs the image)
+just completion-e2e         # build the image + run the e2e in one go
 ```
 
 Without Just (machines that lack it), the raw equivalents are: `uv lock --check &&
@@ -88,9 +91,14 @@ considering work done.
   `conftest` are imported as **absolute** imports — this works because
   basedpyright `extraPaths = ["tests"]` and pytest adds the rootdir. Do not add
   `__init__.py` to `tests/`.
-- Pytest markers `real_runtime` (needs a real pinned runtime, VM-only) and `console`
-  (needs a terminal/pty) are declared in `pyproject.toml` for tests that can't run in
-  the default isolated suite.
+- Pytest markers `real_runtime` (real pinned runtime, VM-only), `console`
+  (terminal/pty), and `container` (prebuilt podman image) are declared in
+  `pyproject.toml`; tests tagged with them skip cleanly when the resource is absent.
+- The completion e2e lives in `tests/e2e/` (Containerfile + tmux driver) and is
+  opt-in — **not part of `just check`**: `just completion-e2e-image` builds the image
+  (the one network step); `just completion-e2e-tests` runs it (network-free, skips
+  without podman or the image). Podman is overridable via `OC_SELECTOR_E2E_PODMAN`
+  for sandboxed hosts.
 
 ## Library quirks
 
