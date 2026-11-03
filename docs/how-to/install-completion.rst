@@ -86,3 +86,26 @@ PowerShell
 .. code-block:: console
 
     $ Add-Content -Path $PROFILE -Value 'oc-selector completion powershell | Out-String | Invoke-Expression'
+
+
+Short alias with completion
+---------------------------
+
+If you prefer a shorter command name, define an alias and generate completion
+for that name with ``--alias``. This drop-in gives you both ``oc`` and
+``oc-selector`` with tab completion:
+
+.. code-block:: console
+
+    $ mkdir -p ~/.bashrc.d
+    $ cat > ~/.bashrc.d/oc-selector.sh <<'EOF'
+    alias oc=oc-selector
+    eval "$(oc-selector completion bash)"
+    eval "$(oc-selector completion bash --alias oc)"
+    EOF
+
+The ``--alias oc`` flag emits a completion script registered under the name
+``oc`` rather than ``oc-selector``; the two ``eval`` lines install completion
+for both names. The alias only affects interactive bash — for scripts or other
+shells, prefer a symlink such as
+``ln -s "$(command -v oc-selector)" ~/.local/bin/oc``.
