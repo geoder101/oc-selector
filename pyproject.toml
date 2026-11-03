@@ -96,6 +96,7 @@ filterwarnings = ["error"]
 markers = [
     "real_runtime: tests requiring real pinned runtime (VM only)",
     "console: tests requiring terminal/pty interaction",
+    "container: tests requiring a prebuilt podman image (see `just completion-e2e-image`)",
 ]
 
 [tool.basedpyright]

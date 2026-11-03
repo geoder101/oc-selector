@@ -69,3 +69,14 @@ docs-check:
 # Build the docs site, then serve the HTML output on the given port (default 8000).
 docs-preview port="8000": docs-check
     python -m http.server --directory docs/_build/html {{port}}
+
+# Build the completion e2e container image (one-time, opt-in network step).
+completion-e2e-image:
+    podman build -t oc-selector-completion-e2e:latest tests/e2e
+
+# Run the container-gated completion e2e tests (needs the image already built).
+completion-e2e-tests:
+    uv run pytest -m container tests/test_completion_e2e.py -v
+
+# Build the image and run the completion e2e in one go.
+completion-e2e: completion-e2e-image completion-e2e-tests

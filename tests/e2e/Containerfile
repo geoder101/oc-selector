@@ -1,0 +1,15 @@
+# Completion e2e image.
+#
+# Pre-installs the shells + tmux so the *test run* needs no network: the test
+# mounts generated scripts + stub executables and drives real shells via tmux.
+# Building this image IS the one-time, opt-in network step (`just completion-e2e-image`).
+FROM docker.io/library/ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends zsh fish tmux \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /work
+CMD ["sleep", "infinity"]
