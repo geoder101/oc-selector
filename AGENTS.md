@@ -46,6 +46,19 @@ considering work done.
 - **The docs build is strict `-W` and pip-only** — any Sphinx warning fails
   `just docs-check`, and it needs no Node/TeX (it is part of `just check`).
 
+## Committing
+
+- **Commit when a logical deliverable is ready.** A commit is a self-contained
+  unit that builds and passes `just check`. When such a deliverable is complete —
+  a finished fix with its tests, a finished feature, a piece of tooling — commit
+  it rather than letting it pile up as uncommitted work. Split a change along its
+  natural seams (a code fix and the test harness that proves it are two commits);
+  never commit half-finished or non-green work.
+- **Conventional Commits style.** `<type>(<scope>): <imperative summary>` with
+  `feat`/`fix`/`test`/`docs`/`refactor`/`build`/... and a scope naming the affected
+  area (e.g. `completion`, `cli`). Keep the subject imperative and tight; add a
+  short body only when the *why* is non-obvious. Never commit secrets.
+
 ## Architecture
 
 - Entry point: `src/oc_selector/cli.py:main` (single console script `oc-selector`).
