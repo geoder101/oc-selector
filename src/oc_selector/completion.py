@@ -244,7 +244,7 @@ def _zsh_script(
 ) -> str:
     """Generate zsh completion script."""
     profile_list = " ".join(profiles)
-    mgmt_list = " ".join(_MANAGEMENT_COMMANDS)
+    first_token = _zsh_quoted(list(_MANAGEMENT_COMMANDS) + list(profiles))
     branches: list[str] = []
     for command in _MANAGEMENT_COMMANDS:
         words = _command_words(command, profiles, command_options)
@@ -254,7 +254,7 @@ def _zsh_script(
             "\n".join(
                 [
                     f"        {command})",
-                    f'            compadd -W "{_join(words)}"',
+                    f"            compadd -- {_zsh_quoted(words)}",
                     "            ;;",
                 ],
             ),
@@ -265,15 +265,14 @@ def _zsh_script(
 #compdef {cmd}
 
 _{cmd}_completions() {{
-    local words
-    words=($@)
-    local cur="${{words[CURRENT]}}"
+    local cur
+    cur="${{words[CURRENT]}}"
     local exe="{exe}"
 
     if (( CURRENT == 2 )); then
         local native
         native=$( "$exe" --get-yargs-completions "$cur" | {_NATIVE_FILTER} )
-        compadd -W "{mgmt_list} {profile_list} $native"
+        compadd -- {first_token} ${{=native}}
         return
     fi
 
@@ -281,20 +280,18 @@ _{cmd}_completions() {{
 {branch_text}
         *)
             local fwd native
-            fwd=("${{words[@]:2}}")
+            fwd=("${{words[@]:1}}")
             if [[ ${{#fwd[@]}} -gt 0 ]]; then
                 local f0="${{fwd[1]}}"
                 if [[ "$f0" == "--" || " {profile_list} " == *" $f0 "* ]]; then
-                    fwd=("${{fwd[@]:2}}")
+                    fwd=("${{fwd[@]:1}}")
                 fi
             fi
             native=$( "$exe" --get-yargs-completions "${{fwd[@]}}" | {_NATIVE_FILTER} )
-            compadd -W "$native"
+            compadd -- ${{=native}}
             ;;
     esac
 }}
-
-_{cmd}_completions "$@"
 """
 
 
@@ -309,18 +306,17 @@ def _fish_script(
     mgmt_list = " ".join(_MANAGEMENT_COMMANDS)
     lines: list[str] = [f"# {cmd} fish completion"]
     lines.append(
-        f"complete -c {cmd} -n '__fish_use_subcommand' -w \"{mgmt_list} {profile_list}\"",
+        f"complete -c {cmd} -f -n '__fish_use_subcommand' -a \"{mgmt_list} {profile_list}\"",
     )
     for command in _MANAGEMENT_COMMANDS:
         words = _command_words(command, profiles, command_options)
         if not words:
             continue
         lines.append(
-            f'complete -c {cmd} -n "__fish_seen_subcommand_from {command}" -w "{_join(words)}"',
+            f'complete -c {cmd} -f -n "__fish_seen_subcommand_from {command}" -a "{_join(words)}"',
         )
     lines.append(f"function __{cmd}_native")
-    lines.append("    set -l toks (commandline -xpc)")
-    lines.append("    set -l cur (commandline -ct)")
+    lines.append("    set -l toks (commandline -opc)")
     lines.append(f'    set -l exe "{exe}"')
     lines.append(f"    set -l mgmt (string split ' ' -- \"{mgmt_list}\")")
     lines.append(f"    set -l profiles (string split ' ' -- \"{profile_list}\")")
@@ -339,7 +335,7 @@ def _fish_script(
     lines.append("    end")
     lines.append(f"    $exe --get-yargs-completions $fwd | {_NATIVE_FILTER}")
     lines.append("end")
-    lines.append(f"complete -c {cmd} -f -F __{cmd}_native")
+    lines.append(f'complete -c {cmd} -f -a "(__{cmd}_native)"')
     return "\n".join(lines) + "\n"
 
 
@@ -402,3 +398,8 @@ Register-ArgumentCompleter -Native -CommandName "{cmd}" {{
 def _join(words: Sequence[str]) -> str:
     """Space-join completion words for embedding in a shell word list."""
     return " ".join(words)
+
+
+def _zsh_quoted(words: Sequence[str]) -> str:
+    """Quote each word for a zsh ``compadd --`` data list (safe for ``--flags``)."""
+    return " ".join(f"'{word}'" for word in words)

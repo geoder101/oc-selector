@@ -269,6 +269,65 @@ class TestNativeDelegation:
         assert 'fwd=("${fwd[@]:1}")' in script
 
 
+class TestShellScriptForms:
+    """Regression guards for real shell idioms that substring checks miss.
+
+    Each assertion here failed against a plausible-but-broken generator:
+
+    - zsh ``compadd -W "…"`` silently returns 1 (no candidates); the data
+      list must be ``compadd -- 'w1' 'w2'`` so ``--flags`` are safe.
+    - zsh ``${words[@]:N}`` skips *N* elements (0-based), so the native slice
+      after the command is ``:1``, not ``:2``.
+    - zsh must not shadow the completion context with ``words=($@)`` (``$@``
+      is empty inside a completion function).
+    - fish ``-w`` means "wraps another command" (not a word list); use ``-a``.
+    - fish has no ``-F`` flag; a command completion is ``-a "(fn)"``.
+    - the fish commandline token list is ``commandline -opc``.
+    """
+
+    def test_zsh_uses_compadd_data_list_not_dash_w(self) -> None:
+        script = generate_completion("zsh", _make_registry(), _OPTIONS)
+        assert "compadd -W" not in script
+        assert "compadd -- " in script
+
+    def test_zsh_no_words_clobber_and_no_trailing_call(self) -> None:
+        script = generate_completion("zsh", _make_registry(), _OPTIONS)
+        assert "words=($@)" not in script
+        assert '_oc-selector_completions "$@"' not in script
+        assert script.rstrip().endswith("}")
+
+    def test_zsh_native_slice_skips_only_the_command(self) -> None:
+        script = generate_completion("zsh", _make_registry(), _OPTIONS)
+        assert 'fwd=("${words[@]:1}")' in script
+        assert "${words[@]:2}" not in script
+
+    def test_fish_uses_append_not_wraps(self) -> None:
+        script = generate_completion("fish", _make_registry(), _OPTIONS)
+        assert " -w " not in script
+        assert " -a " in script
+
+    def test_fish_native_uses_command_append_form(self) -> None:
+        script = generate_completion("fish", _make_registry(), _OPTIONS)
+        complete_lines = [
+            ln for ln in script.splitlines() if ln.lstrip().startswith("complete")
+        ]
+        assert all(" -F " not in ln for ln in complete_lines)
+        assert '-a "(__oc-selector_native)"' in script
+
+    def test_fish_uses_opc_commandline(self) -> None:
+        script = generate_completion("fish", _make_registry(), _OPTIONS)
+        assert "commandline -opc" in script
+        assert "commandline -xpc" not in script
+
+    def test_fish_every_complete_line_suppresses_files(self) -> None:
+        script = generate_completion("fish", _make_registry(), _OPTIONS)
+        complete_lines = [
+            line for line in script.splitlines() if line.lstrip().startswith("complete")
+        ]
+        assert complete_lines
+        assert all(" -f " in line for line in complete_lines)
+
+
 def _bash_branch(script: str, command: str) -> str:
     """Return the text of a single bash ``case`` branch for ``command``."""
     marker = f"{command})"
