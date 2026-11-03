@@ -26,7 +26,7 @@ import typer
 from pydantic import TypeAdapter, ValidationError
 
 from oc_selector import __version__
-from oc_selector.completion import generate_completion
+from oc_selector.completion import extract_command_options, generate_completion
 from oc_selector.diagnostics import collect_diagnostics, probe_version
 from oc_selector.errors import OcSelectorError
 from oc_selector.host_sync import sync_host_package
@@ -456,7 +456,8 @@ def completion(
     """Generate a shell completion script."""
     reg_path = registry_path()
     reg = load_registry(reg_path) if reg_path.exists() else None
-    script = generate_completion(shell, reg, alias=alias)
+    command_options = extract_command_options(app)
+    script = generate_completion(shell, reg, command_options, alias=alias)
     typer.echo(script)
 
 

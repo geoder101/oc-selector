@@ -42,6 +42,27 @@ Each ``oc-selector completion <shell>`` prints a self-contained script for that
 shell; the ``eval``/``source``/``Invoke-Expression`` step installs it into the
 current shell.
 
+What it completes
+-----------------
+
+The generated script completes two kinds of input:
+
+- **Management commands and switches.** At the first token it offers the
+  management subcommands (``list``, ``create``, ``set-default``, ``completion``,
+  ...) alongside the profile names; after a management command it offers that
+  command's switches (for example ``oc create --mo<TAB>`` offers ``--model``).
+- **The proxied OpenCode app.** At the native boundary — after a bare first
+  token, a profile name, or a leading ``--`` — the script forwards the already
+  typed words to the OpenCode executable's own completion
+  (``<exe> --get-yargs-completions ...``), so ``oc <TAB>`` lists OpenCode's
+  subcommands and ``oc run --mo<TAB>`` offers its flags.
+
+The executable the script calls is the one stored in the registry
+(``oc-selector list`` shows it); when no registry is installed the default
+``opencode`` is used. Because completion is generated once and the registry can
+change, re-run ``oc-selector completion <shell>`` after changing
+``opencode_executable`` to refresh the baked-in path.
+
 Make it permanent
 -----------------
 
