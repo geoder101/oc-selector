@@ -355,7 +355,7 @@ def info(
     typer.echo(f"Default profile: {result.default_profile or 'none'}")
     typer.echo(f"Profiles: {len(result.profiles)}")
     for profile in result.profiles:
-        typer.echo(f"  {profile.name}: {profile.status}")
+        typer.echo(f"  {profile.name}: {profile.directory} ({profile.status})")
 
 
 @app.command()

@@ -343,6 +343,28 @@ class TestInfoCommand:
         result = runner.invoke(app, ["info"])
         assert result.exit_code == 0
         assert "OpenCode:" in result.output
+        # The profile line shows its directory: "<name>: <directory> (<status>)".
+        assert "default: default (" in result.output
+
+    def test_happy_info_shows_profile_directory(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Each profile line prints its directory, distinct from the name."""
+        config_dir = tmp_path / "xdg-config"
+        (config_dir / "oc-selector").mkdir(parents=True)
+        reg = Registry(
+            default_profile="default",
+            profiles={"default": ProfileEntry(directory="my-dir")},
+        )
+        reg_path = config_dir / "oc-selector" / "config.toml"
+        reg_path.write_text(registry_to_toml(reg))
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(config_dir))
+        monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+        result = runner.invoke(app, ["info"])
+        assert result.exit_code == 0
+        assert "default: my-dir (" in result.output
 
     def test_happy_info_json(self, setup_registry: Path) -> None:  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
         result = runner.invoke(app, ["info", "--json"])
