@@ -26,6 +26,7 @@ from oc_selector.paths import (
     omo_config_path,
     registry_path,
     resolve_config_parent,
+    resolve_profile_directory,
     state_root,
 )
 
@@ -149,7 +150,7 @@ def collect_diagnostics(
         opencode_exe = registry.opencode_executable
         for name, entry in registry.profiles.items():
             issues: list[str] = []
-            if not (parent / entry.directory).exists():
+            if not resolve_profile_directory(parent, entry.directory).exists():
                 issues.append(f"directory-missing:{entry.directory}")
             profiles.append(
                 ProfileDiagnostics(

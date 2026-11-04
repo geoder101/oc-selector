@@ -21,7 +21,11 @@ from pydantic import TypeAdapter
 
 import oc_selector
 from oc_selector import cli, errors
-from oc_selector.paths import default_profile_directory, profile_directory
+from oc_selector.paths import (
+    default_profile_directory,
+    profile_directory,
+    resolve_profile_directory,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -169,6 +173,26 @@ class TestPaths:
     def test_happy_default_profile_directory(self) -> None:
         """default_profile_directory namespaces new profiles under the state root."""
         assert default_profile_directory("work") == "oc-selector/profiles/work"
+
+    def test_happy_resolve_profile_directory(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """~ expands, absolute is verbatim, relative resolves under the parent."""
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        parent = Path("/cfg")
+        assert resolve_profile_directory(parent, "work") == Path("/cfg/work")
+        assert resolve_profile_directory(
+            parent,
+            "oc-selector/profiles/w",
+        ) == Path("/cfg/oc-selector/profiles/w")
+        assert resolve_profile_directory(parent, "../elsewhere") == Path(
+            "/cfg/../elsewhere"
+        )
+        assert resolve_profile_directory(parent, "/abs/out") == Path("/abs/out")
+        assert resolve_profile_directory(parent, "~/conf") == tmp_path / "home" / "conf"
+        assert resolve_profile_directory(parent, "~") == tmp_path / "home"
 
 
 class TestSubprocessHarness:

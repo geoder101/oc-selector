@@ -107,6 +107,20 @@ class TestBuildLaunchEnv:
         env = build_launch_env(reg, "default", base_env={})
         assert env["OPENCODE_CONFIG_DIR"] == "/tmp/test-xdg/opencode"
 
+    def test_happy_expands_tilde_config_dir(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A ~-prefixed profile directory is expanded for OPENCODE_CONFIG_DIR."""
+        monkeypatch.setenv("XDG_CONFIG_HOME", "/tmp/test-xdg")
+        monkeypatch.setenv("HOME", "/tmp/test-home")
+        reg = Registry(
+            schema_version=1,
+            default_profile="default",
+            profiles={"default": ProfileEntry(directory="~/conf")},
+        )
+        env = build_launch_env(reg, "default", base_env={})
+        assert env["OPENCODE_CONFIG_DIR"] == "/tmp/test-home/conf"
+
     def test_happy_unmanaged_preserves_omo(
         self,
         monkeypatch: pytest.MonkeyPatch,

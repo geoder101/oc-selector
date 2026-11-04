@@ -6,6 +6,7 @@ Contract:
 - State root is ``<parent>/oc-selector``.
 - Registry is ``<state>/config.toml``.
 - OMO location stays actual home ``~/.omo``, independent of selected OpenCode directory.
+- A profile ``directory`` may be relative, absolute, or contain a leading ``~``.
 """
 
 from __future__ import annotations
@@ -56,6 +57,20 @@ def omo_config_path() -> Path:
 def profile_directory(parent: Path, name: str) -> Path:
     """Return the directory for a named profile under the config parent."""
     return parent / name
+
+
+def resolve_profile_directory(parent: Path, directory: str) -> Path:
+    """Resolve a profile ``directory`` to the concrete path opencode should use.
+
+    A leading ``~`` (or ``~user``) is expanded via ``expanduser``. An absolute
+    directory resolves to itself; a relative directory resolves under
+    ``parent``. This keeps profiles pointing outside the config parent working
+    whether written relative, absolute, or with a leading ``~``.
+    """
+    expanded = Path(directory).expanduser()
+    if expanded.is_absolute():
+        return expanded
+    return parent / expanded
 
 
 def default_profile_directory(name: str) -> str:

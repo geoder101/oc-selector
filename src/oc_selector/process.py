@@ -30,7 +30,7 @@ from oc_selector.errors import (
     ExecutableNotExecutableError,
     MaintenanceError,
 )
-from oc_selector.paths import resolve_config_parent
+from oc_selector.paths import resolve_config_parent, resolve_profile_directory
 from oc_selector.registry import Registry  # noqa: TC001
 from oc_selector.routing import NativeRoute  # noqa: TC001
 
@@ -91,7 +91,9 @@ def build_launch_env(
     parent = resolve_config_parent()
     profile = registry.profiles[profile_name]
     # Always set the selected config directory
-    env["OPENCODE_CONFIG_DIR"] = str(parent / profile.directory)
+    env["OPENCODE_CONFIG_DIR"] = str(
+        resolve_profile_directory(parent, profile.directory)
+    )
     # OMO profile handling
     if profile.omo_profile is not None:
         # Owned: set registered OMO_PROFILE, clear OCX_PROFILE

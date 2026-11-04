@@ -37,6 +37,7 @@ from oc_selector.paths import (
     omo_config_path,
     registry_path,
     resolve_config_parent,
+    resolve_profile_directory,
     state_root,
 )
 from oc_selector.process import launch_native, resolve_executable
@@ -385,7 +386,7 @@ def sync(
     failed = False
     for target_name, entry in targets:
         result = sync_host_package(
-            parent / entry.directory,
+            resolve_profile_directory(parent, entry.directory),
             state_root(),
             dry_run=dry_run,
         )

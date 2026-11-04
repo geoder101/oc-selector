@@ -172,6 +172,32 @@ class TestRegistryHandling:
         gpt = next(p for p in result.profiles if p.name == "gpt")
         assert gpt.omo_profile == "oc-selector-gpt"
 
+    def test_happy_tilde_directory_exists(self, isolated_home: Path) -> None:
+        """A ~-prefixed directory is expanded before the existence check."""
+        (isolated_home / "myconf").mkdir()
+        reg = Registry(
+            schema_version=1,
+            default_profile="default",
+            profiles={"default": ProfileEntry(directory="~/myconf")},
+        )
+        result = collect_diagnostics(reg, version_probe=_fake_probe_ok())
+        assert result.profiles[0].status == "ok"
+        assert result.profiles[0].issues == []
+
+    def test_failure_tilde_directory_missing(
+        self,
+        isolated_home: Path,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+    ) -> None:
+        """A ~-prefixed directory that is absent reports directory-missing."""
+        reg = Registry(
+            schema_version=1,
+            default_profile="default",
+            profiles={"default": ProfileEntry(directory="~/no-such-dir")},
+        )
+        result = collect_diagnostics(reg, version_probe=_fake_probe_ok())
+        assert result.profiles[0].status == "warning"
+        assert "directory-missing:~/no-such-dir" in result.profiles[0].issues
+
 
 class TestPrivacy:
     def test_happy_no_secrets_in_output(self) -> None:
