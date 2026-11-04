@@ -33,6 +33,7 @@ from oc_selector.host_sync import sync_host_package
 from oc_selector.init_flow import run_init, run_recovery_all
 from oc_selector.omo_upgrade import OmoSchema, run_omo_upgrade
 from oc_selector.paths import (
+    default_profile_directory,
     omo_config_path,
     registry_path,
     resolve_config_parent,
@@ -197,7 +198,10 @@ def create(  # noqa: PLR0913 - one parameter per CLI flag; the command surface i
     ] = None,
     no_interactive: Annotated[
         bool,
-        typer.Option("--no-interactive", help="Do not prompt for the directory"),
+        typer.Option(
+            "--no-interactive",
+            help="Do not prompt; use the default directory",
+        ),
     ] = False,
     dry_run: Annotated[
         bool,
@@ -207,17 +211,14 @@ def create(  # noqa: PLR0913 - one parameter per CLI flag; the command surface i
     """Create a new profile."""
     _require_registry()
     if directory is None:
+        default_dir = default_profile_directory(name)
         if no_interactive or not sys.stdin.isatty():
-            _error_exit(
-                f"Directory is required for profile {name!r}; pass it as an argument.",
-                code=2,
+            directory = default_dir
+        else:
+            raw = _PROMPT_ADAPTER.validate_python(
+                typer.prompt(f"Directory for profile {name!r}", default=default_dir),
             )
-        raw = _PROMPT_ADAPTER.validate_python(
-            typer.prompt(f"Directory for profile {name!r}"),
-        )
-        if not raw.strip():
-            _error_exit("Directory cannot be empty.", code=2)
-        directory = raw.strip()
+            directory = raw.strip() or default_dir
     inp = CreateProfileInput(
         name=name,
         directory=directory,

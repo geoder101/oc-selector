@@ -182,16 +182,19 @@ class TestCreateCommand:
             == "prompted-dir"
         )
 
-    def test_failure_create_prompted_empty(
+    def test_happy_create_prompted_empty_uses_default(
         self,
-        setup_registry: Path,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+        setup_registry: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        # Whitespace-only input passes the prompt loop but fails the strip check.
+        # Empty or whitespace prompt input falls back to the default directory.
         monkeypatch.setattr("typer.testing._NamedTextIOWrapper.isatty", _fake_isatty)
         result = runner.invoke(app, ["create", "prompted"], input="   \n")
-        assert result.exit_code == 2
-        assert "Directory cannot be empty." in result.output
+        assert result.exit_code == 0
+        assert (
+            load_registry(setup_registry).profiles["prompted"].directory
+            == "oc-selector/profiles/prompted"
+        )
 
 
 class TestEditCommand:
@@ -403,10 +406,22 @@ class TestCreateFlags:
         assert result.exit_code == 0
         assert load_registry(setup_registry).profiles["withmodel"].model == "openai/gpt"
 
-    def test_failure_create_no_interactive_no_dir(self, setup_registry: Path) -> None:  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+    def test_happy_create_no_dir_defaults_to_prefix(self, setup_registry: Path) -> None:
         result = runner.invoke(app, ["create", "noint", "--no-interactive"])
-        assert result.exit_code == 2
-        assert "Directory is required" in result.output
+        assert result.exit_code == 0
+        prof = load_registry(setup_registry).profiles["noint"]
+        assert prof.directory == "oc-selector/profiles/noint"
+
+    def test_happy_create_explicit_dir_overrides_default(
+        self,
+        setup_registry: Path,
+    ) -> None:
+        result = runner.invoke(
+            app,
+            ["create", "custom", "elsewhere", "--no-interactive"],
+        )
+        assert result.exit_code == 0
+        assert load_registry(setup_registry).profiles["custom"].directory == "elsewhere"
 
 
 class TestEditFlags:

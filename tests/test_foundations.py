@@ -21,7 +21,7 @@ from pydantic import TypeAdapter
 
 import oc_selector
 from oc_selector import cli, errors
-from oc_selector.paths import profile_directory
+from oc_selector.paths import default_profile_directory, profile_directory
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -165,6 +165,10 @@ class TestPaths:
     def test_happy_profile_directory(self) -> None:
         """profile_directory joins the profile name under the config parent."""
         assert profile_directory(Path("/cfg"), "work") == Path("/cfg/work")
+
+    def test_happy_default_profile_directory(self) -> None:
+        """default_profile_directory namespaces new profiles under the state root."""
+        assert default_profile_directory("work") == "oc-selector/profiles/work"
 
 
 class TestSubprocessHarness:

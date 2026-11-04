@@ -56,3 +56,16 @@ def omo_config_path() -> Path:
 def profile_directory(parent: Path, name: str) -> Path:
     """Return the directory for a named profile under the config parent."""
     return parent / name
+
+
+def default_profile_directory(name: str) -> str:
+    """Return the default directory for a newly created profile.
+
+    New profiles live under the oc-selector state root in a ``profiles``
+    subdirectory, so their config dirs do not squat next to unrelated app XDG
+    dirs or the state files (``config.toml``, journals, backups). The value is
+    relative to the config parent and resolves to
+    ``<parent>/oc-selector/profiles/<name>``. An explicit ``--directory``
+    still wins.
+    """
+    return f"oc-selector/profiles/{name}"

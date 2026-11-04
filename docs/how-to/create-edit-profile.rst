@@ -24,6 +24,16 @@ A profile does not need a model:
     $ oc-selector create personal personal-dir
     Created profile 'personal'
 
+If you omit the directory, the profile defaults to the oc-selector state root
+at ``profiles/<name>`` (``~/.config/oc-selector/profiles/<name>`` by default).
+Pass a directory to point elsewhere, or ``--no-interactive`` to skip the prompt
+and take the default:
+
+.. code-block:: console
+
+    $ oc-selector create fast --no-interactive
+    Created profile 'fast'
+
 Preview with ``--dry-run``
 --------------------------
 
