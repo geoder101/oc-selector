@@ -6,33 +6,10 @@ forwards all remaining args to `opencode` byte-for-byte.
 
 ## Commands (just-managed)
 
-Development is driven by the [just](https://github.com/casey/just) task runner.
-`just check` is the single gate: lock-check, format-check, lint, typecheck, test,
-docs-check, build — in that order. Every operation has a recipe:
-
-```bash
-just sync          # verify the lockfile, then sync the dev environment
-just check         # the single gate (lock-check, format-check, lint, typecheck, test, docs-check, build)
-just test <args>   # tests  (single: just test tests/test_x.py::test_y)
-just format        # apply the formatter
-just format-check  # check formatting without changing files
-just lint          # run the linter
-just typecheck     # type-check with basedpyright
-just cli <args>    # run the CLI, forwarding args to oc-selector
-just build         # build (success message goes to STDERR, not stdout)
-just docs-check    # strict (-W) Sphinx docs build (pip-only, no Node/TeX)
-just docs-preview <port>  # build, then serve the docs site on <port>
-just coverage <args>  # coverage run (exploratory, no threshold)
-just coverage-check   # the fresh full-suite combined coverage gate (90% threshold)
-just completion-e2e-image   # build the completion e2e image (one-time, network)
-just completion-e2e-tests   # run the container-gated completion e2e (needs the image)
-just completion-e2e         # build the image + run the e2e in one go
-```
-
-Without Just (machines that lack it), the raw equivalents are: `uv lock --check &&
-uv sync --locked --group dev`, `uv run ruff format .`, `uv run ruff check .`,
-`uv run basedpyright`, `uv run pytest`, and `uv build`. Run `just check` before
-considering work done.
+Development is driven by the [just](https://github.com/casey/just) task runner; the
+`justfile` is the source of truth. `just check` is the single gate — run it before
+considering work done. `just cli <args>` runs the tool. See `just --list` (or the
+`justfile`) for the rest, including the raw command behind each recipe.
 
 ## Quality gate quirks (these will bite)
 
