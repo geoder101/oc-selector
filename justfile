@@ -55,6 +55,10 @@ cli *args:
 build:
     uv build
 
+# Install the tool locally into a managed uv tool environment (exposes `oc-selector` on PATH).
+install:
+    uv tool install .
+
 # The single gate: lock-check, format-check, lint, typecheck, test, docs-check, build.
 check: lock-check format-check lint typecheck test docs-check build
 
