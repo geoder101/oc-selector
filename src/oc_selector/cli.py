@@ -34,6 +34,7 @@ from oc_selector.init_flow import run_init, run_recovery_all
 from oc_selector.omo_upgrade import OmoSchema, run_omo_upgrade
 from oc_selector.paths import (
     default_profile_directory,
+    display_profile_directory,
     omo_config_path,
     registry_path,
     resolve_config_parent,
@@ -315,7 +316,7 @@ def list_profiles(
     ] = False,
 ) -> None:
     """List all registered profiles."""
-    _, reg = _require_registry()
+    parent, reg = _require_registry()
     if json_output:
         payload = {
             "schema_version": 1,
@@ -323,7 +324,7 @@ def list_profiles(
             "profiles": [
                 {
                     "name": profile_name,
-                    "directory": entry.directory,
+                    "directory": display_profile_directory(parent, entry.directory),
                     "omo_profile": entry.omo_profile,
                 }
                 for profile_name, entry in reg.profiles.items()
@@ -334,7 +335,8 @@ def list_profiles(
     for profile_name, entry in reg.profiles.items():
         marker = "*" if profile_name == reg.default_profile else " "
         suffix = f" ({entry.model})" if entry.model else ""
-        typer.echo(f"{marker} {profile_name} -> {entry.directory}{suffix}")
+        resolved = display_profile_directory(parent, entry.directory)
+        typer.echo(f"{marker} {profile_name} -> {resolved}{suffix}")
 
 
 @app.command()

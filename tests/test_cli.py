@@ -89,6 +89,38 @@ def _fake_isatty(_self: object) -> bool:
     return True
 
 
+def _setup_home_profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
+    """Registry with one profile under a home-rooted XDG_CONFIG_HOME.
+
+    The config parent lives under HOME, so the resolved directory abbreviates
+    with ``~``. Returns the expected ``~/.config/...`` display form.
+    """
+    home = tmp_path / "home"
+    home.mkdir()
+    config_dir = home / ".config"
+    (config_dir / "oc-selector").mkdir(parents=True)
+    reg = Registry(
+        default_profile="default",
+        profiles={"default": ProfileEntry(directory="oc-selector/profiles/standard")},
+    )
+    (config_dir / "oc-selector" / "config.toml").write_text(registry_to_toml(reg))
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_dir))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    return "~/.config/oc-selector/profiles/standard"
+
+
+def _profile_named(payload: dict[str, object], name: str) -> dict[str, object]:
+    """Return the profile entry with the given name from a list/info JSON payload."""
+    profiles = _PROFILES_ADAPTER.validate_python(payload["profiles"])
+    for prof in profiles:
+        if prof["name"] == name:
+            return prof
+    msg = f"profile {name!r} not found in payload"
+    raise AssertionError(msg)
+
+
 class TestInitCommand:
     def test_happy_init(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
@@ -144,6 +176,31 @@ class TestListCommand:
         result = runner.invoke(app, ["list"])
         assert result.exit_code == 0
         assert "default" in result.output
+
+    def test_happy_list_shows_resolved_directory(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The list view prints the home-abbreviated resolved directory."""
+        expected = _setup_home_profile(tmp_path, monkeypatch)
+        result = runner.invoke(app, ["list"])
+        assert result.exit_code == 0
+        assert f"default -> {expected}" in result.output
+
+    def test_happy_list_json_directory_is_resolved(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The list --json directory is the home-abbreviated resolved form."""
+        expected = _setup_home_profile(tmp_path, monkeypatch)
+        result = runner.invoke(app, ["list", "--json"])
+        assert result.exit_code == 0
+        payload = _PAYLOAD_ADAPTER.validate_python(json.loads(result.output))
+        prof = _profile_named(payload, "default")
+        assert prof["directory"] == expected
+        assert "resolved_directory" not in prof
 
     def test_failure_no_registry(
         self,
@@ -343,28 +400,31 @@ class TestInfoCommand:
         result = runner.invoke(app, ["info"])
         assert result.exit_code == 0
         assert "OpenCode:" in result.output
-        # The profile line shows its directory: "<name>: <directory> (<status>)".
-        assert "default: default (" in result.output
 
-    def test_happy_info_shows_profile_directory(
+    def test_happy_info_shows_resolved_directory(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Each profile line prints its directory, distinct from the name."""
-        config_dir = tmp_path / "xdg-config"
-        (config_dir / "oc-selector").mkdir(parents=True)
-        reg = Registry(
-            default_profile="default",
-            profiles={"default": ProfileEntry(directory="my-dir")},
-        )
-        reg_path = config_dir / "oc-selector" / "config.toml"
-        reg_path.write_text(registry_to_toml(reg))
-        monkeypatch.setenv("XDG_CONFIG_HOME", str(config_dir))
-        monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+        """The info profile line prints the home-abbreviated resolved directory."""
+        expected = _setup_home_profile(tmp_path, monkeypatch)
         result = runner.invoke(app, ["info"])
         assert result.exit_code == 0
-        assert "default: my-dir (" in result.output
+        assert f"default: {expected} (" in result.output
+
+    def test_happy_info_json_directory_is_resolved(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The info --json directory is the home-abbreviated resolved form."""
+        expected = _setup_home_profile(tmp_path, monkeypatch)
+        result = runner.invoke(app, ["info", "--json"])
+        assert result.exit_code == 0
+        payload = _PAYLOAD_ADAPTER.validate_python(json.loads(result.output))
+        prof = _profile_named(payload, "default")
+        assert prof["directory"] == expected
+        assert "resolved_directory" not in prof
 
     def test_happy_info_json(self, setup_registry: Path) -> None:  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
         result = runner.invoke(app, ["info", "--json"])

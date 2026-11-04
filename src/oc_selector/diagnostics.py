@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 
 from oc_selector import __version__
 from oc_selector.paths import (
+    display_profile_directory,
     omo_config_path,
     registry_path,
     resolve_config_parent,
@@ -39,6 +40,7 @@ class ProfileDiagnostics:
     """Per-profile health entry."""
 
     name: str
+    # Resolved, home-abbreviated directory (see display_profile_directory).
     directory: str
     omo_profile: str | None
     status: str = "ok"
@@ -155,7 +157,7 @@ def collect_diagnostics(
             profiles.append(
                 ProfileDiagnostics(
                     name=name,
-                    directory=entry.directory,
+                    directory=display_profile_directory(parent, entry.directory),
                     omo_profile=entry.omo_profile,
                     status="warning" if issues else "ok",
                     issues=issues,

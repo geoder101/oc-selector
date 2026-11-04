@@ -20,8 +20,15 @@ from collections.abc import Callable
 from pathlib import Path  # noqa: TC003
 from typing import TYPE_CHECKING
 
+from pydantic import TypeAdapter
+
 from oc_selector.diagnostics import collect_diagnostics, probe_version
 from oc_selector.registry import ProfileEntry, Registry
+
+_PROFILE_ADAPTER: TypeAdapter[dict[str, object]] = TypeAdapter(dict[str, object])
+_PROFILES_ADAPTER: TypeAdapter[list[dict[str, object]]] = TypeAdapter(
+    list[dict[str, object]],
+)
 
 if TYPE_CHECKING:
     from subprocess import CompletedProcess
@@ -197,6 +204,22 @@ class TestRegistryHandling:
         result = collect_diagnostics(reg, version_probe=_fake_probe_ok())
         assert result.profiles[0].status == "warning"
         assert "directory-missing:~/no-such-dir" in result.profiles[0].issues
+
+    def test_happy_directory_is_resolved_in_json(
+        self,
+        isolated_home: Path,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+    ) -> None:
+        """to_dict emits the home-abbreviated resolved form as the directory."""
+        reg = Registry(
+            schema_version=1,
+            default_profile="default",
+            profiles={"default": ProfileEntry(directory="my-dir")},
+        )
+        result = collect_diagnostics(reg, version_probe=_fake_probe_ok())
+        profiles = _PROFILES_ADAPTER.validate_python(result.to_dict()["profiles"])
+        prof = _PROFILE_ADAPTER.validate_python(profiles[0])
+        assert prof["directory"] == "~/.config/my-dir"
+        assert "resolved_directory" not in prof
 
 
 class TestPrivacy:

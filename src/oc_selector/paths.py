@@ -73,6 +73,24 @@ def resolve_profile_directory(parent: Path, directory: str) -> Path:
     return parent / expanded
 
 
+def display_profile_directory(parent: Path, directory: str) -> str:
+    """Return the resolved, home-abbreviated display form of a profile directory.
+
+    Resolves ``directory`` (see :func:`resolve_profile_directory`) and rewrites
+    a leading home directory as ``~``. Used for the ``directory`` value in the
+    ``info``/``list`` views and their JSON output; the stored registry value is
+    unchanged. Paths that resolve outside the home directory are shown in full.
+    """
+    resolved = resolve_profile_directory(parent, directory)
+    home = Path.home()
+    try:
+        if resolved == home:
+            return "~"
+        return f"~/{resolved.relative_to(home).as_posix()}"
+    except ValueError:
+        return str(resolved)
+
+
 def default_profile_directory(name: str) -> str:
     """Return the default directory for a newly created profile.
 

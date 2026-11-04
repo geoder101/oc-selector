@@ -23,6 +23,7 @@ import oc_selector
 from oc_selector import cli, errors
 from oc_selector.paths import (
     default_profile_directory,
+    display_profile_directory,
     profile_directory,
     resolve_profile_directory,
 )
@@ -193,6 +194,26 @@ class TestPaths:
         assert resolve_profile_directory(parent, "/abs/out") == Path("/abs/out")
         assert resolve_profile_directory(parent, "~/conf") == tmp_path / "home" / "conf"
         assert resolve_profile_directory(parent, "~") == tmp_path / "home"
+
+    def test_happy_display_profile_directory(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """~ resolves and is abbreviated; outside-home paths are shown in full."""
+        home = tmp_path / "home"
+        monkeypatch.setenv("HOME", str(home))
+        parent = home / ".config"
+        # Relative under the (home) parent abbreviates to ~/...
+        assert display_profile_directory(parent, "oc-selector/profiles/standard") == (
+            "~/.config/oc-selector/profiles/standard"
+        )
+        # A ~-prefixed directory resolves and abbreviates.
+        assert display_profile_directory(parent, "~/conf") == "~/conf"
+        # A directory resolving exactly to the home directory is just "~".
+        assert display_profile_directory(parent, "~") == "~"
+        # An absolute path outside the home directory is shown in full.
+        assert display_profile_directory(parent, "/data/elsewhere") == "/data/elsewhere"
 
 
 class TestSubprocessHarness:
