@@ -36,8 +36,9 @@ considering work done.
 
 ## Quality gate quirks (these will bite)
 
-- **ruff `select = ["ALL"]` is strict**: requires docstrings (D), trailing commas
-  (COM812), import sorting (I001), `from __future__ import annotations`, etc.
+- **ruff `select = ["ALL"]` is strict**: requires docstrings (D), import sorting
+  (I001), `from __future__ import annotations`, etc. Trailing commas are left to
+  the formatter, not lint-enforced (COM812 is intentionally ignored).
   `ruff check --fix` handles most; type-only imports (TC003) are manual. Every
   ignore is justified inline in `pyproject.toml` — do not add new ignores.
 - **basedpyright fails on warnings too, not just errors.** A clean gate = 0 errors

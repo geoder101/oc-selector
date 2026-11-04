@@ -20,7 +20,8 @@ dependencies = [
 oc-selector = "oc_selector.cli:main"
 
 [build-system]
-requires = ["uv_build>=0.4.4"]
+# Bounded so a future breaking uv_build major can't break the sdist build.
+requires = ["uv_build>=0.4.4,<0.13"]
 build-backend = "uv_build"
 
 [dependency-groups]
@@ -44,9 +45,17 @@ line-length = 88
 [tool.ruff.lint]
 select = ["ALL"]
 # Copyright is tracked in the LICENSE file, not per-file headers.
+# select=["ALL"] pulls in both members of two incompatible pydocstyle pairs.
+# D203 and D213 are the losers, dropped explicitly (keeping D211: one blank
+# line before a class; D212: summary on the first line). This makes ruff's
+# automatic resolution explicit and silences the "incompatible" warnings.
+# COM812 overlaps the formatter's jurisdiction over trailing commas and makes
+# `ruff format` emit a standing conflict warning. The formatter already owns
+# trailing-comma layout (respecting magic trailing commas), so the rule is
+# dropped to silence the warning; trailing commas are no longer lint-enforced.
 # TRY003/EM101/EM102 conflict with each other and with Python's natural
 # exception-raising pattern; messages are kept inline for clarity.
-ignore = ["CPY001", "TRY003", "EM101", "EM102"]
+ignore = ["CPY001", "COM812", "D203", "D213", "TRY003", "EM101", "EM102"]
 
 [tool.ruff.lint.per-file-ignores]
 # Test code may assert, compare against small literals, and use fixed temp names.
