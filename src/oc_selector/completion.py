@@ -13,7 +13,8 @@ Contract:
 - After the native boundary, delegate to opencode's Yargs completion
   (``--get-yargs-completions``) instead of offering wrapper candidates.
 - Management subcommands complete their declared Typer option switches,
-  derived from the live command tree (no hardcoded flag lists).
+  derived from the live command tree (no hardcoded flag lists); the Typer
+  ``--help`` option is always offered as well.
 - Registered profiles read safely; absent/bad registry yields safe
   management-only completion with no file changes.
 """
@@ -139,13 +140,19 @@ def _command_words(
     profiles: Sequence[str],
     command_options: Mapping[str, Sequence[str]],
 ) -> list[str]:
-    """Return the completion words for a command (positionals, then switches)."""
+    """Return the completion words for a command (positionals, then switches).
+
+    Typer injects a ``--help`` option into every command, so it is always
+    offered in addition to the command's declared switches; a command with no
+    declared switches still yields a branch (``--help`` alone).
+    """
     words: list[str] = []
     if command in _PROFILE_COMMANDS:
         words.extend(profiles)
     elif command == "completion":
         words.extend(_SHELL_CHOICES)
     words.extend(command_options.get(command, ()))
+    words.append("--help")
     return words
 
 

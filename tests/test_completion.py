@@ -219,6 +219,31 @@ class TestGenerateCompletion:
         create_branch = _bash_branch(script, "create")
         assert "default gpt local" in create_branch
 
+    def test_happy_help_offered_in_all_shells(self) -> None:
+        reg = _make_registry()
+        for shell in ("bash", "zsh", "fish", "powershell"):
+            script = generate_completion(shell, reg, _OPTIONS)
+            assert "--help" in script
+
+    def test_happy_help_offered_on_a_declared_switch_command(self) -> None:
+        reg = _make_registry()
+        script = generate_completion("bash", reg, _OPTIONS)
+        info_branch = _bash_branch(script, "info")
+        assert "--json" in info_branch
+        assert "--help" in info_branch
+
+    def test_happy_help_still_offered_when_mapping_empty(self) -> None:
+        """The Typer-injected ``--help`` keeps a command's branch alive.
+
+        Regression: a command with no declared switches (only ``--help``) used
+        to produce no completion branch, so ``oc-selector info --he`` completed
+        nothing.
+        """
+        reg = _make_registry()
+        script = generate_completion("bash", reg, {})
+        info_branch = _bash_branch(script, "info")
+        assert "--help" in info_branch
+
     def test_failure_unsupported_shell(self) -> None:
         reg = _make_registry()
         with pytest.raises(ArgumentError):
