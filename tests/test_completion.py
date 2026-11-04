@@ -193,11 +193,15 @@ class TestGenerateCompletion:
     def test_happy_switches_grouped_under_their_command(self) -> None:
         reg = _make_registry()
         script = generate_completion("bash", reg, _OPTIONS)
-        # The create branch lists create's switches after its profile candidates.
+        # The create branch lists only its switches (new name, not existing).
         create_branch = _bash_branch(script, "create")
-        assert "default gpt local" in create_branch
+        assert "default" not in create_branch
         assert "--model" in create_branch
         assert "-m" in create_branch
+        # The edit branch lists profiles + its switches.
+        edit_branch = _bash_branch(script, "edit")
+        assert "default gpt local" in edit_branch
+        assert "--model" in edit_branch
         # The init branch (no positional) lists only its switches.
         init_branch = _bash_branch(script, "init")
         assert "--no-backup" in init_branch
@@ -216,8 +220,11 @@ class TestGenerateCompletion:
         script = generate_completion("bash", reg, {})
         assert "--dry-run" not in script
         # Profile candidates for profile commands are still offered.
+        edit_branch = _bash_branch(script, "edit")
+        assert "default gpt local" in edit_branch
+        # Create does NOT offer existing profiles (it names a new one).
         create_branch = _bash_branch(script, "create")
-        assert "default gpt local" in create_branch
+        assert "default" not in create_branch
 
     def test_happy_help_offered_in_all_shells(self) -> None:
         reg = _make_registry()

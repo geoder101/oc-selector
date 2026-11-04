@@ -53,9 +53,9 @@ _MANAGEMENT_COMMANDS: tuple[str, ...] = (
     "info",
 )
 
-# Commands whose first positional argument is a profile name.
+# Commands whose first positional argument selects an existing profile.
 _PROFILE_COMMANDS: frozenset[str] = frozenset(
-    {"create", "edit", "delete", "set-default", "sync", "upgrade-omo"},
+    {"edit", "delete", "set-default", "sync", "upgrade-omo"},
 )
 
 _SHELL_CHOICES: tuple[str, ...] = ("bash", "zsh", "fish", "powershell")
