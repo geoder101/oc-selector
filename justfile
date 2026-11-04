@@ -22,6 +22,11 @@ lock-check:
 sync: lock-check
     uv sync --locked --group dev
 
+# Upgrade all packages to the latest compatible versions (refreshes index metadata), sync, then run `just check`.
+upgrade-deps: lock-check
+    uv lock --upgrade --refresh
+    uv sync --locked --group dev
+
 # Check formatting without changing files.
 format-check:
     uv run ruff format --check .
