@@ -88,16 +88,24 @@ def _require_registry() -> tuple[Path, Registry]:
 
 
 def _run_recovery() -> None:
-    """Recover all pending journals and report each outcome."""
+    """Recover all pending journals and report each outcome.
+
+    Exits 1 if any journal fails to restore, so a partial recovery is never
+    mistaken for success.
+    """
     results = run_recovery_all()
     if not results:
         typer.echo("No pending recoveries.")
         return
+    failed = False
     for entry in results:
         if entry.recovered:
             typer.echo(f"Recovered: {entry.journal_id}")
         else:
             typer.echo(f"Failed: {entry.journal_id} - {entry.error}", err=True)
+            failed = True
+    if failed:
+        raise typer.Exit(1)
 
 
 def _eligible_profiles(

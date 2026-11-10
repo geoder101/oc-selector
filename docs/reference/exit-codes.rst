@@ -44,13 +44,22 @@ Exit 1 is produced when a management command's operation fails:
   the case for:
 
   - ``create`` with an invalid, reserved, or duplicate name;
-  - ``edit`` or ``set-default`` naming a profile that does not exist;
-  - ``sync`` when a package sync fails.
+  - ``edit`` or ``set-default`` naming a profile that does not exist.
 
   .. code-block:: console
 
       $ oc-selector set-default nonexistent
       Error: Profile 'nonexistent' not found
+
+- **Maintenance-operation failures.** ``sync`` when a package sync fails, or
+  ``init --recover`` when a pending journal cannot be restored. Each failing
+  target or journal is reported to stderr; the command exits 1 so a partial
+  run is never mistaken for success.
+
+  .. code-block:: console
+
+      $ oc-selector init --recover
+      Failed: rec-fail - Cannot restore /home/user/project/target
 
 2 — argument or registry error
 ------------------------------

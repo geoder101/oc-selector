@@ -380,7 +380,7 @@ class TestRecoverCommand:
             result = runner.invoke(app, ["init", "--recover"])
         finally:
             ro_dir.chmod(0o700)
-        assert result.exit_code == 0
+        assert result.exit_code == 1
         assert "Failed: rec-fail - Cannot restore" in result.output
 
 
