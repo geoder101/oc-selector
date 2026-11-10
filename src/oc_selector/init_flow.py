@@ -54,7 +54,6 @@ class RecoveryEntry:
     journal_id: str
     phase: JournalPhase
     operation: str
-    description: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -166,7 +165,6 @@ def list_pending_recoveries(
             journal_id=j.id,
             phase=j.phase,
             operation=j.operation,
-            description=f"Pending {j.operation} in phase {j.phase.value}",
         )
         for j in pending
     ]
