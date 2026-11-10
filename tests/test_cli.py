@@ -10,13 +10,13 @@ Covers:
 from __future__ import annotations
 
 import json
+import os
 import runpy
 import sys
 from pathlib import Path  # noqa: TC003
 from typing import TYPE_CHECKING
 
 import pytest
-import typer
 from pydantic import TypeAdapter
 from typer.testing import CliRunner
 
@@ -807,14 +807,18 @@ class TestMainDispatch:
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
-        # Contract: the raw path raises typer.Exit(2) uncaught (no click
-        # conversion), so the process exits 1 with a traceback today.
+        # The raw/native path now exits cleanly with the intended code (2) and no
+        # traceback: main() converts the native-branch typer.Exit to SystemExit.
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "nonexistent"))
         monkeypatch.setattr(sys, "argv", ["oc-selector", "run"])
-        with pytest.raises(typer.exceptions.Exit) as excinfo:
+        with pytest.raises(SystemExit) as excinfo:
             main()
-        assert excinfo.value.exit_code == 2
+        assert excinfo.value.code == 2
+        captured = capsys.readouterr()
+        assert "No registry found" in captured.err
+        assert "Traceback" not in captured.err
 
     def test_happy_raw_dispatch(
         self,
@@ -850,6 +854,49 @@ class TestMainDispatch:
     ) -> None:
         monkeypatch.setenv("PATH", str(tmp_path / "empty"))
         monkeypatch.setattr(sys, "argv", ["oc-selector", "run"])
-        with pytest.raises(typer.exceptions.Exit) as excinfo:
+        with pytest.raises(SystemExit) as excinfo:
             main()
-        assert excinfo.value.exit_code == 2
+        # A missing executable is honored as its class's code (127), cleanly.
+        assert excinfo.value.code == 127
+
+    def test_failure_raw_executable_non_executable(
+        self,
+        setup_registry: Path,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # A present-but-non-executable executable (given as an absolute path) is
+        # honored as 126. Skipped as root, where os.access(X_OK) is always true.
+        if getattr(os, "geteuid", lambda: -1)() == 0:
+            pytest.skip("os.access(X_OK) is meaningless for root")
+        bad = tmp_path / "opencode"
+        bad.write_text("#!/bin/sh\n")
+        bad.chmod(0o644)
+        reg_path = setup_registry.parent / "config.toml"
+        lines = [
+            "schema_version = 1",
+            'default_profile = "default"',
+            f'opencode_executable = "{bad}"',
+            "[profiles.default]",
+            'directory = "."',
+        ]
+        reg_path.write_text("\n".join(lines) + "\n")
+        monkeypatch.setattr(sys, "argv", ["oc-selector", "run"])
+        with pytest.raises(SystemExit) as excinfo:
+            main()
+        assert excinfo.value.code == 126
+
+    def test_completion_bad_shell_exit_2_no_traceback(
+        self,
+        setup_registry: Path,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        # An unsupported shell is a usage error: exit 2, no traceback.
+        monkeypatch.setattr(sys, "argv", ["oc-selector", "completion", "zzz"])
+        with pytest.raises(SystemExit) as excinfo:
+            main()
+        assert excinfo.value.code == 2
+        captured = capsys.readouterr()
+        assert "Unsupported shell" in captured.err
+        assert "Traceback" not in captured.err

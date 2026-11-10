@@ -116,6 +116,7 @@ class TestCreateWizard:
         )
         result = run_create_wizard(inp, registry_path, state_root)
         assert result.success is False
+        assert result.exit_code == 2
 
     def test_failure_cannot_load_registry_invalid_toml(
         self,
@@ -213,6 +214,7 @@ class TestEditWizard:
         )
         result = run_edit_wizard(inp, registry_path, state_root)
         assert result.success is False
+        assert result.exit_code == 2
 
     def test_failure_cannot_load_registry_bad_default(
         self,

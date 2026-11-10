@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path  # noqa: TC003
 
 from oc_selector.errors import (
+    ArgumentError,
     RegistryError,
     SchemaValidationError,
 )
@@ -67,6 +68,8 @@ class WizardResult:
     profile_name: str
     message: str
     error: str | None = None
+    # Public exit code for failure results (2 for usage errors, 1 otherwise).
+    exit_code: int = 1
 
 
 def validate_create_input(inp: CreateProfileInput) -> None:
@@ -78,12 +81,13 @@ def validate_create_input(inp: CreateProfileInput) -> None:
     """
     validate_profile_name(inp.name)
     if not inp.directory:
-        raise SchemaValidationError("Directory is required")
+        # A missing/empty directory is a usage error (exit 2), not a schema fault.
+        raise ArgumentError("Directory is required")
     if inp.model is not None:
         validate_model_id(inp.model)
 
 
-def validate_edit_input(inp: EditProfileInput, existing: ProfileEntry) -> None:  # noqa: ARG001  # pyright: ignore[reportUnusedParameter]
+def validate_edit_input(inp: EditProfileInput) -> None:
     """Validate edit profile input.
 
     Raises:
@@ -91,7 +95,7 @@ def validate_edit_input(inp: EditProfileInput, existing: ProfileEntry) -> None: 
 
     """
     if inp.directory is not None and not inp.directory:
-        raise SchemaValidationError("Directory cannot be empty")
+        raise ArgumentError("Directory cannot be empty")
     if inp.model is not None:
         validate_model_id(inp.model)
 
@@ -117,12 +121,16 @@ def run_create_wizard(
     """
     try:
         validate_create_input(inp)
-    except (SchemaValidationError, RegistryError) as exc:
+    except (ArgumentError, SchemaValidationError, RegistryError) as exc:
+        # A missing/empty directory is a usage error (exit 2); a bad name or
+        # model is an operation rejection (exit 1), per the verified exit-code
+        # contract in docs/reference/exit-codes.rst.
         return WizardResult(
             success=False,
             profile_name=inp.name,
             message="Validation failed",
             error=str(exc),
+            exit_code=2 if isinstance(exc, ArgumentError) else 1,
         )
 
     # Load existing registry
@@ -236,13 +244,16 @@ def run_edit_wizard(
     existing = reg.profiles[inp.name]
 
     try:
-        validate_edit_input(inp, existing)
-    except (SchemaValidationError, RegistryError) as exc:
+        validate_edit_input(inp)
+    except (ArgumentError, SchemaValidationError, RegistryError) as exc:
+        # A missing/empty directory is a usage error (exit 2); any other
+        # failure (bad model, etc.) is an operation rejection (exit 1).
         return WizardResult(
             success=False,
             profile_name=inp.name,
             message="Validation failed",
             error=str(exc),
+            exit_code=2 if isinstance(exc, ArgumentError) else 1,
         )
 
     if dry_run:

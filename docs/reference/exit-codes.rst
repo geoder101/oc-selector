@@ -9,9 +9,13 @@ running command, not against the error-type definitions in the source.
 +=====================+=============================================================+
 | ``0``               | Success                                                     |
 +---------------------+-------------------------------------------------------------+
-| ``1``               | Maintenance or argument error                               |
+| ``1``               | Operation or maintenance error (clean ``Error:`` line)      |
 +---------------------+-------------------------------------------------------------+
-| ``2``               | Argument or registry error (clean, from a management cmd)   |
+| ``2``               | Argument/usage or registry error (clean)                    |
++---------------------+-------------------------------------------------------------+
+| ``126``             | Executable present but not executable                       |
++---------------------+-------------------------------------------------------------+
+| ``127``             | Executable not found                                        |
 +---------------------+-------------------------------------------------------------+
 | ``130``             | User interruption (Ctrl+C)                                  |
 +---------------------+-------------------------------------------------------------+
@@ -30,16 +34,16 @@ When a native command runs, the wrapper replaces itself with the native
 ``opencode`` process, so the exit code is the native command's own exit code. A
 native command that succeeds exits 0.
 
-1 — maintenance or argument error
----------------------------------
+1 — operation or maintenance error
+----------------------------------
 
-Exit 1 covers two distinct situations:
+Exit 1 is produced when a management command's operation fails:
 
-- **Wizard-level argument errors.** When a management command's underlying
-  operation fails validation, the command exits 1 with a clean ``Error:`` line.
-  This is the case for:
+- **Operation-validation failures.** When a command's underlying operation
+  fails validation, the command exits 1 with a clean ``Error:`` line. This is
+  the case for:
 
-  - ``create`` with an invalid, reserved, or duplicate-directory name;
+  - ``create`` with an invalid, reserved, or duplicate name;
   - ``edit`` or ``set-default`` naming a profile that does not exist;
   - ``sync`` when a package sync fails.
 
@@ -47,25 +51,6 @@ Exit 1 covers two distinct situations:
 
       $ oc-selector set-default nonexistent
       Error: Profile 'nonexistent' not found
-
-- **Native-forward and registry-load errors (with a traceback).** The
-  native-forward error paths — no registry, a missing executable, and a
-  non-executable executable — currently exit **1 with a traceback**. This is
-  because the top-level dispatcher raises ``typer.Exit`` outside of the command
-  parser's context, so the exception is not converted into a clean exit. The
-  same applies to an **invalid registry file**, which is loaded in that same
-  top-level dispatcher:
-
-  .. code-block:: console
-
-      $ oc-selector --model openai/gpt-4 "fix the bug"
-      Error: No registry found. Run 'oc-selector init' first.
-      Traceback (most recent call last):
-        ...
-      typer.exceptions.Exit: 2
-
-  The ``Error:`` line is printed; the traceback is a known limitation, not a
-  signal that the exit code is 2.
 
 2 — argument or registry error
 ------------------------------
@@ -85,10 +70,9 @@ Exit 2 is produced by the clean, in-command checks of the management commands:
     $ oc-selector list
     Error: No registry found. Run 'oc-selector init' first.
 
-Note the contrast with the exit-1 case above: the *missing* registry is a clean
-exit 2 when checked by a management command, but an *invalid* registry file is
-an exit 1 with a traceback because it is loaded earlier, in the top-level
-dispatcher.
+The registry is loaded by the top-level dispatcher before routing. A *missing*
+registry and an *invalid* registry file are both reported as a clean exit 2, so
+there is no traceback either way.
 
 130 — user interruption
 -----------------------
@@ -105,10 +89,14 @@ example, a native command that exits 42 makes ``oc-selector`` exit 42.
 About 126 and 127
 -----------------
 
-The source defines error types for a missing executable (``127``) and a
-non-executable file (``126``), and the launcher contains a ``return 127``.
-**Neither code is ever produced by the command today.** On POSIX the launcher
-replaces the process with ``execve`` (so the ``return 127`` is unreachable), and
-the missing-executable and non-executable cases are raised in the top-level
-dispatcher, which exits **1 with a traceback** as described above. They are
-therefore documented here as exit 1, not as distinct 126/127 codes.
+The launcher distinguishes the two launcher-level failures and honors each
+error type's own code, exiting cleanly (no traceback):
+
+- **127 — missing executable.** Resolving ``opencode_executable`` finds no
+  regular file. ``main`` prints ``Error: Executable not found: <name>`` and
+  exits 127.
+- **126 — non-executable executable.** The resolved file is not executable.
+  ``main`` prints ``Error: Not executable: <path>`` and exits 126.
+
+Both errors are raised before the native process is launched, so they surface
+from the Python-level dispatcher rather than from a failed ``execve``.

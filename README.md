@@ -133,14 +133,15 @@ deployment output URL shown by the `Documentation Pages` workflow's `deploy` job
 | Code | Meaning |
 |------|---------|
 | 0 | Success |
-| 1 | Maintenance or argument error (native-forward and registry-load error paths exit 1 with a traceback) |
-| 2 | Argument or registry error (clean, from a management command) |
+| 1 | Operation or maintenance error (clean `Error:` line) |
+| 2 | Argument/usage or registry error (clean) |
+| 126 | Executable present but not executable |
+| 127 | Executable not found |
 | 130 | User interruption (Ctrl+C) |
 | *native-forwarded* | The native `opencode` command's own exit code |
 
-The missing-executable and non-executable native cases are **not** emitted as
-distinct 127/126 codes today: they surface as exit 1 with a traceback on the
-native-forward path (a known limitation). See
+The missing-executable and non-executable native cases are emitted as the clean,
+distinct codes 127 and 126 respectively (no traceback). See
 [docs/reference/exit-codes.rst](docs/reference/exit-codes.rst) for the full
 verified table.
 

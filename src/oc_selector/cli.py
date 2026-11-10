@@ -231,7 +231,7 @@ def create(  # noqa: PLR0913 - one parameter per CLI flag; the command surface i
     if result.success:
         typer.echo(result.message)
     else:
-        _error_exit(result.error or result.message)
+        _error_exit(result.error or result.message, code=result.exit_code)
 
 
 @app.command()
@@ -267,7 +267,7 @@ def edit(
     if result.success:
         typer.echo(result.message)
     else:
-        _error_exit(result.error or result.message)
+        _error_exit(result.error or result.message, code=result.exit_code)
 
 
 @app.command("set-default")
@@ -285,7 +285,7 @@ def set_default_cmd(
     if result.success:
         typer.echo(result.message)
     else:
-        _error_exit(result.error or result.message)
+        _error_exit(result.error or result.message, code=result.exit_code)
 
 
 @app.command()
@@ -304,7 +304,7 @@ def delete(
     if result.success:
         typer.echo(result.message)
     else:
-        _error_exit(result.error or result.message)
+        _error_exit(result.error or result.message, code=result.exit_code)
 
 
 @app.command("list")
@@ -495,7 +495,13 @@ def main() -> None:
             resolve_executable(reg.opencode_executable)
             launch_native(decision, reg)
     except OcSelectorError as exc:
-        _error_exit(str(exc), code=2)
+        # Honor the error class's own exit code (126/127/2/1); a plain message.
+        typer.echo(f"Error: {exc}", err=True)
+        raise SystemExit(exc.exit_code) from None
+    except typer.Exit as exc:
+        # Raised by the native branch (outside the app parser), which does not
+        # catch it; convert to a clean SystemExit (no traceback, intended code).
+        raise SystemExit(exc.exit_code) from None
 
 
 if __name__ == "__main__":
