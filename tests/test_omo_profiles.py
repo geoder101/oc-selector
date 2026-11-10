@@ -38,7 +38,7 @@ class TestLegacyConversion:
         inp = ConversionInput(
             agents={"build": {"model": "test/provider/model-a"}},
         )
-        result = convert_legacy_to_native("oc-selector-test", inp)
+        result = convert_legacy_to_native(inp)
         assert "agents" in result.profiles_entry
         agents = _MODEL_MAP_ADAPTER.validate_python(result.profiles_entry["agents"])
         assert agents["build"]["models"] == ["test/provider/model-a"]
@@ -47,7 +47,7 @@ class TestLegacyConversion:
         inp = ConversionInput(
             agents={"build": {"model": "p/m1", "fallback_models": ["p/m2", "p/m3"]}},
         )
-        result = convert_legacy_to_native("oc-selector-test", inp)
+        result = convert_legacy_to_native(inp)
         agents = _MODEL_MAP_ADAPTER.validate_python(result.profiles_entry["agents"])
         assert agents["build"]["models"] == ["p/m1", "p/m2", "p/m3"]
 
@@ -55,7 +55,7 @@ class TestLegacyConversion:
         inp = ConversionInput(
             categories={"quick": {"model": "test/provider/quick"}},
         )
-        result = convert_legacy_to_native("oc-selector-test", inp)
+        result = convert_legacy_to_native(inp)
         categories = _MODEL_MAP_ADAPTER.validate_python(
             result.profiles_entry["categories"],
         )
@@ -63,14 +63,14 @@ class TestLegacyConversion:
 
     def test_happy_disabled_hooks(self) -> None:
         inp = ConversionInput(disabled_hooks=["hook1", "hook2"])
-        result = convert_legacy_to_native("oc-selector-test", inp)
+        result = convert_legacy_to_native(inp)
         assert result.harness_entry["disabled_hooks"] == ["hook1", "hook2"]
 
     def test_happy_permission_under_harness(self) -> None:
         inp = ConversionInput(
             agents={"explore": {"model": "p/m", "permission": "allow"}},
         )
-        result = convert_legacy_to_native("oc-selector-test", inp)
+        result = convert_legacy_to_native(inp)
         assert HARNESS_KEY == "[opencode]"
         harness_agents = _PERMISSION_MAP_ADAPTER.validate_python(
             result.harness_entry["agents"],
@@ -82,7 +82,7 @@ class TestLegacyConversion:
         inp = ConversionInput(
             agents={"explore": {"permission": "deny"}},
         )
-        result = convert_legacy_to_native("oc-selector-test", inp)
+        result = convert_legacy_to_native(inp)
         assert "agents" not in result.profiles_entry
         harness_agents = _PERMISSION_MAP_ADAPTER.validate_python(
             result.harness_entry["agents"],
@@ -94,7 +94,7 @@ class TestLegacyConversion:
         inp = ConversionInput(
             agents={"build": {"fallback_models": ["p/m2", "p/m3"]}},
         )
-        result = convert_legacy_to_native("oc-selector-test", inp)
+        result = convert_legacy_to_native(inp)
         agents = _MODEL_MAP_ADAPTER.validate_python(result.profiles_entry["agents"])
         assert agents["build"]["models"] == ["p/m2", "p/m3"]
 
@@ -103,7 +103,7 @@ class TestLegacyConversion:
         inp = ConversionInput(
             agents={"build": {"fallback_models": None}},
         )
-        result = convert_legacy_to_native("oc-selector-test", inp)
+        result = convert_legacy_to_native(inp)
         assert result.profiles_entry["agents"] == {"build": {"models": [None]}}
 
     def test_happy_empty_category_omitted(self) -> None:
@@ -111,7 +111,7 @@ class TestLegacyConversion:
         inp = ConversionInput(
             categories={"quick": {}},
         )
-        result = convert_legacy_to_native("oc-selector-test", inp)
+        result = convert_legacy_to_native(inp)
         assert "categories" not in result.profiles_entry
 
     def test_happy_multiple_agents(self) -> None:
@@ -122,7 +122,7 @@ class TestLegacyConversion:
                 "plan": {"model": "p/plan"},
             },
         )
-        result = convert_legacy_to_native("oc-selector-test", inp)
+        result = convert_legacy_to_native(inp)
         assert (
             len(_OBJECT_MAP_ADAPTER.validate_python(result.profiles_entry["agents"]))
             == 3
@@ -133,24 +133,23 @@ class TestLegacyConversion:
             agents={"build": {"model": "p/m", "unknown_field": "x"}},
         )
         with pytest.raises(SchemaValidationError, match="Unsupported"):
-            convert_legacy_to_native("oc-selector-test", inp)
+            convert_legacy_to_native(inp)
 
     def test_failure_unknown_category_field(self) -> None:
         inp = ConversionInput(
             categories={"quick": {"model": "p/m", "bad": "x"}},
         )
         with pytest.raises(SchemaValidationError, match="Unsupported"):
-            convert_legacy_to_native("oc-selector-test", inp)
+            convert_legacy_to_native(inp)
 
 
 class TestModernProjection:
     def test_happy_build_entry_with_model(self) -> None:
-        entry = build_native_entry("oc-selector-test", model="p/m")
+        entry = build_native_entry(model="p/m")
         assert entry["model"] == "p/m"
 
     def test_happy_build_entry_with_agents(self) -> None:
         entry = build_native_entry(
-            "oc-selector-test",
             agents={"build": ["p/m1", "p/m2"]},
         )
         agents = _MODEL_MAP_ADAPTER.validate_python(entry["agents"])
@@ -158,14 +157,13 @@ class TestModernProjection:
 
     def test_happy_build_entry_with_categories(self) -> None:
         entry = build_native_entry(
-            "oc-selector-test",
             categories={"quick": ["p/q"]},
         )
         categories = _MODEL_MAP_ADAPTER.validate_python(entry["categories"])
         assert categories["quick"]["models"] == ["p/q"]
 
     def test_happy_empty_entry(self) -> None:
-        entry = build_native_entry("oc-selector-test")
+        entry = build_native_entry()
         assert entry == {}
 
 

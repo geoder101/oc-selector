@@ -82,13 +82,11 @@ def _build_models_list(fields: dict[str, object]) -> list[object] | None:
 
 
 def convert_legacy_to_native(  # noqa: C901, PLR0912
-    owned_name: str,  # noqa: ARG001  # pyright: ignore[reportUnusedParameter]
     input_data: ConversionInput,
 ) -> ConversionResult:
     """Convert legacy OMO fields to native profile entry structure.
 
     Args:
-        owned_name: The owned profile name (e.g. "oc-selector-gpt").
         input_data: Typed legacy input fields.
 
     Returns:
@@ -159,7 +157,6 @@ def convert_legacy_to_native(  # noqa: C901, PLR0912
 
 
 def build_native_entry(
-    owned_name: str,  # noqa: ARG001  # pyright: ignore[reportUnusedParameter]
     model: str | None = None,
     agents: dict[str, list[str]] | None = None,
     categories: dict[str, list[str]] | None = None,
@@ -167,7 +164,6 @@ def build_native_entry(
     """Build a modern native profile entry.
 
     Args:
-        owned_name: The owned profile name.
         model: Top-level model (singleton).
         agents: Agent name to models list mapping.
         categories: Category name to models list mapping.
