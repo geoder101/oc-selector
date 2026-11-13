@@ -17,12 +17,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path  # noqa: TC003
 
+from oc_selector.agents_link import LinkResult, ensure_link
 from oc_selector.errors import (
     ArgumentError,
     RegistryError,
     SchemaValidationError,
 )
 from oc_selector.omo_profiles import validate_model_id
+from oc_selector.paths import (
+    global_agents_md_path,
+    resolve_config_parent,
+    resolve_profile_directory,
+)
 from oc_selector.registry import (
     ProfileEntry,
     Registry,
@@ -70,6 +76,10 @@ class WizardResult:
     error: str | None = None
     # Public exit code for failure results (2 for usage errors, 1 otherwise).
     exit_code: int = 1
+    # Human-readable fragment describing the profile->global AGENTS.md link
+    # outcome (linked target / "link dangling: <target>" / "warning: <reason>"),
+    # or None when no link step ran (e.g. dry run).
+    agents_link: str | None = None
 
 
 def validate_create_input(inp: CreateProfileInput) -> None:
@@ -98,6 +108,15 @@ def validate_edit_input(inp: EditProfileInput) -> None:
         raise ArgumentError("Directory cannot be empty")
     if inp.model is not None:
         validate_model_id(inp.model)
+
+
+def _link_status_fragment(result: LinkResult, global_path: Path) -> str:
+    """Build the ``agents_link`` message fragment from a link decision."""
+    if result.status == "dangling":
+        return f"link dangling: {global_path}"
+    if result.status == "warn":
+        return f"warning: {result.reason}"
+    return str(global_path)
 
 
 def run_create_wizard(
@@ -169,6 +188,7 @@ def run_create_wizard(
 
     # Use transaction for mutation
     tx = Transaction(state_root, operation="create")
+    link_fragment: str | None = None
     try:
         tx.begin()
         new_reg = Registry(
@@ -184,6 +204,18 @@ def run_create_wizard(
         tmp_file.write_text(new_toml)
         tx.stage_file(tmp_file, registry_path)
         tx.commit()
+        # Link the profile's AGENTS.md to the global guard. This runs AFTER the
+        # registry commit, via the standalone primitive (NOT the registry
+        # transaction), so a symlink failure never fails the create and the
+        # registry is never left half-written.
+        profile_dir = resolve_profile_directory(resolve_config_parent(), inp.directory)
+        global_path = global_agents_md_path()
+        try:
+            link_result = ensure_link(profile_dir, global_path)
+        except OSError as exc:
+            link_fragment = f"warning: {exc}"
+        else:
+            link_fragment = _link_status_fragment(link_result, global_path)
     except (OSError, RegistryError) as exc:
         tx.rollback()
         return WizardResult(
@@ -199,6 +231,7 @@ def run_create_wizard(
         success=True,
         profile_name=inp.name,
         message=f"Created profile {inp.name!r}",
+        agents_link=link_fragment,
     )
 
 

@@ -2,6 +2,7 @@
 
 Covers:
 - Create wizard validates and creates profile
+- Create links the profile's AGENTS.md to the global guard (T4)
 - Edit wizard preserves existing fields
 - Set-default is registry-only
 - All mutations go through transaction
@@ -14,6 +15,12 @@ from pathlib import Path  # noqa: TC003
 
 import pytest
 
+from oc_selector.agents_link import link_path
+from oc_selector.paths import (
+    global_agents_md_path,
+    resolve_config_parent,
+    resolve_profile_directory,
+)
 from oc_selector.registry import ProfileEntry, Registry, load_registry, registry_to_toml
 from oc_selector.transactions import Transaction
 from oc_selector.wizard import (
@@ -60,8 +67,21 @@ def block_commit(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(Transaction, "commit", _raise)
 
 
+def _global_guard(isolated_home: Path) -> Path:
+    """Create the global ``AGENTS.md`` guard and return its absolute path."""
+    target = isolated_home / ".config" / "opencode" / "AGENTS.md"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("global guard\n")
+    return target
+
+
 class TestCreateWizard:
-    def test_happy_create(self, registry_path: Path, state_root: Path) -> None:
+    def test_happy_create(
+        self,
+        isolated_home: Path,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+        registry_path: Path,
+        state_root: Path,
+    ) -> None:
         inp = CreateProfileInput(
             name="test-profile",
             directory="test-dir",
@@ -75,7 +95,12 @@ class TestCreateWizard:
         reg = load_registry(registry_path)
         assert "test-profile" in reg.profiles
 
-    def test_happy_create_no_model(self, registry_path: Path, state_root: Path) -> None:
+    def test_happy_create_no_model(
+        self,
+        isolated_home: Path,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+        registry_path: Path,
+        state_root: Path,
+    ) -> None:
         inp = CreateProfileInput(
             name="no-model",
             directory="dir",
@@ -85,6 +110,7 @@ class TestCreateWizard:
 
     def test_failure_duplicate_name(
         self,
+        isolated_home: Path,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
         registry_path: Path,
         state_root: Path,
     ) -> None:
@@ -97,7 +123,12 @@ class TestCreateWizard:
         assert result.error is not None
         assert "already exists" in result.error
 
-    def test_failure_invalid_name(self, registry_path: Path, state_root: Path) -> None:
+    def test_failure_invalid_name(
+        self,
+        isolated_home: Path,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+        registry_path: Path,
+        state_root: Path,
+    ) -> None:
         inp = CreateProfileInput(
             name="Invalid Name",
             directory="dir",
@@ -107,6 +138,7 @@ class TestCreateWizard:
 
     def test_failure_empty_directory(
         self,
+        isolated_home: Path,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
         registry_path: Path,
         state_root: Path,
     ) -> None:
@@ -120,6 +152,7 @@ class TestCreateWizard:
 
     def test_failure_cannot_load_registry_invalid_toml(
         self,
+        isolated_home: Path,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
         tmp_path: Path,
         state_root: Path,
     ) -> None:
@@ -137,6 +170,7 @@ class TestCreateWizard:
 
     def test_failure_transaction_commit_error(
         self,
+        isolated_home: Path,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
         registry_path: Path,
         state_root: Path,
         block_commit: None,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
@@ -156,6 +190,111 @@ class TestCreateWizard:
         assert "new-profile" not in reg.profiles
 
 
+class TestCreateWizardAgentsLink:
+    """T4: create links the profile's AGENTS.md to the global guard."""
+
+    def test_links_when_global_present(
+        self,
+        isolated_home: Path,
+        registry_path: Path,
+        state_root: Path,
+    ) -> None:
+        target = _global_guard(isolated_home)
+        inp = CreateProfileInput(name="linked", directory="work")
+        result = run_create_wizard(inp, registry_path, state_root)
+        assert result.success is True
+        profile_dir = resolve_profile_directory(
+            resolve_config_parent(),
+            inp.directory,
+        )
+        link = link_path(profile_dir)
+        assert link.is_symlink() is True
+        assert str(link.readlink()) == str(target.resolve())
+        assert profile_dir.is_dir()
+        assert result.agents_link is not None
+        assert result.agents_link == str(target)
+
+    def test_config_dir_created_on_create(
+        self,
+        isolated_home: Path,
+        registry_path: Path,
+        state_root: Path,
+    ) -> None:
+        _global_guard(isolated_home)
+        inp = CreateProfileInput(name="dirs", directory="work")
+        result = run_create_wizard(inp, registry_path, state_root)
+        assert result.success is True
+        profile_dir = resolve_profile_directory(
+            resolve_config_parent(),
+            inp.directory,
+        )
+        assert profile_dir.is_dir()
+
+    def test_dangling_when_global_absent(
+        self,
+        isolated_home: Path,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+        registry_path: Path,
+        state_root: Path,
+    ) -> None:
+        inp = CreateProfileInput(name="dangling", directory="work")
+        result = run_create_wizard(inp, registry_path, state_root)
+        assert result.success is True
+        assert result.agents_link is not None
+        assert "dangling" in result.agents_link
+        profile_dir = resolve_profile_directory(
+            resolve_config_parent(),
+            inp.directory,
+        )
+        link = link_path(profile_dir)
+        assert link.is_symlink() is True
+        assert str(link.readlink()) == str(global_agents_md_path().resolve())
+
+    def test_dry_run_creates_no_link(
+        self,
+        isolated_home: Path,
+        registry_path: Path,
+        state_root: Path,
+    ) -> None:
+        _global_guard(isolated_home)
+        before = registry_path.read_bytes()
+        inp = CreateProfileInput(name="dry", directory="work")
+        result = run_create_wizard(inp, registry_path, state_root, dry_run=True)
+        assert result.success is True
+        assert result.agents_link is None
+        profile_dir = resolve_profile_directory(
+            resolve_config_parent(),
+            inp.directory,
+        )
+        assert not profile_dir.exists()
+        assert not link_path(profile_dir).exists()
+        assert registry_path.read_bytes() == before
+
+    def test_symlink_failure_warns_and_continues(
+        self,
+        isolated_home: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        registry_path: Path,
+        state_root: Path,
+    ) -> None:
+        _global_guard(isolated_home)
+
+        def _raise(*_args: object, **_kwargs: object) -> None:
+            raise PermissionError("simulated permission denied")
+
+        monkeypatch.setattr("os.symlink", _raise)
+        inp = CreateProfileInput(name="warn", directory="work")
+        result = run_create_wizard(inp, registry_path, state_root)
+        assert result.success is True
+        assert result.agents_link is not None
+        assert "warning" in result.agents_link
+        profile_dir = resolve_profile_directory(
+            resolve_config_parent(),
+            inp.directory,
+        )
+        # No partial link remains (the empty config dir may remain).
+        assert not link_path(profile_dir).is_symlink()
+
+
 class TestEditWizard:
     def test_happy_edit_directory(self, registry_path: Path, state_root: Path) -> None:
         inp = EditProfileInput(
@@ -169,6 +308,7 @@ class TestEditWizard:
 
     def test_happy_edit_preserves_omo(
         self,
+        isolated_home: Path,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
         registry_path: Path,
         state_root: Path,
     ) -> None:
@@ -263,7 +403,12 @@ directory = "default"
 
 
 class TestSetDefault:
-    def test_happy_set_default(self, registry_path: Path, state_root: Path) -> None:
+    def test_happy_set_default(
+        self,
+        isolated_home: Path,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+        registry_path: Path,
+        state_root: Path,
+    ) -> None:
         # Create a second profile first
         create_inp = CreateProfileInput(
             name="second",
@@ -336,7 +481,12 @@ class TestSetDefault:
 
 
 class TestDelete:
-    def test_happy_delete(self, registry_path: Path, state_root: Path) -> None:
+    def test_happy_delete(
+        self,
+        isolated_home: Path,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+        registry_path: Path,
+        state_root: Path,
+    ) -> None:
         run_create_wizard(
             CreateProfileInput(name="second", directory="second-dir"),
             registry_path,
@@ -376,7 +526,12 @@ class TestDelete:
         )
         assert result.error == expected
 
-    def test_happy_delete_dry_run(self, registry_path: Path, state_root: Path) -> None:
+    def test_happy_delete_dry_run(
+        self,
+        isolated_home: Path,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+        registry_path: Path,
+        state_root: Path,
+    ) -> None:
         run_create_wizard(
             CreateProfileInput(name="second", directory="second-dir"),
             registry_path,
