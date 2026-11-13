@@ -437,3 +437,103 @@ class TestLockAndRecoveryAssembly:
         result = collect_diagnostics(_registry(), version_probe=_fake_probe_ok())
         assert result.recovery["status"] == "clean"
         assert result.recovery["transactions"] == []
+
+
+class TestAgentsLinkStatus:
+    """Per-profile ``AGENTS.md`` link status in the diagnostics report.
+
+    The status is ``"linked-ok"`` (identical symlink to the global guard),
+    ``"dangling"`` (symlink whose target is absent), or ``"absent"`` (no link
+    or a real, non-symlink file). The JSON view carries the same field.
+    """
+
+    def _registry_work(self) -> Registry:
+        """Build a single-profile registry whose dir differs from opencode."""
+        return Registry(
+            schema_version=1,
+            default_profile="work",
+            profiles={"work": ProfileEntry(directory="work")},
+        )
+
+    def _make_link(
+        self,
+        isolated_home: Path,
+        *,
+        target_exists: bool,
+        real_file: bool,
+    ) -> None:
+        """Create the profile link: identical, dangling, or real file."""
+        work_dir = isolated_home / ".config" / "work"
+        work_dir.mkdir(parents=True)
+        link = work_dir / "AGENTS.md"
+        global_path = isolated_home / ".config" / "opencode" / "AGENTS.md"
+        if real_file:
+            link.write_text("real", encoding="utf-8")
+            return
+        if target_exists:
+            global_path.parent.mkdir(parents=True, exist_ok=True)
+            global_path.write_text("global", encoding="utf-8")
+        link.symlink_to(str(global_path))
+
+    def test_happy_linked_ok(
+        self,
+        isolated_home: Path,
+    ) -> None:
+        """An identical symlink to a present global reports linked-ok."""
+        self._make_link(isolated_home, target_exists=True, real_file=False)
+        result = collect_diagnostics(
+            self._registry_work(),
+            version_probe=_fake_probe_ok(),
+        )
+        assert result.profiles[0].agents_link == "linked-ok"
+
+    def test_happy_dangling(
+        self,
+        isolated_home: Path,
+    ) -> None:
+        """A symlink whose target is absent reports dangling."""
+        self._make_link(isolated_home, target_exists=False, real_file=False)
+        result = collect_diagnostics(
+            self._registry_work(),
+            version_probe=_fake_probe_ok(),
+        )
+        assert result.profiles[0].agents_link == "dangling"
+
+    def test_happy_absent_no_link(
+        self,
+        isolated_home: Path,
+    ) -> None:
+        """No link at all reports absent."""
+        self._registry_work()
+        (isolated_home / ".config" / "work").mkdir(parents=True)
+        result = collect_diagnostics(
+            self._registry_work(),
+            version_probe=_fake_probe_ok(),
+        )
+        assert result.profiles[0].agents_link == "absent"
+
+    def test_happy_absent_real_file(
+        self,
+        isolated_home: Path,
+    ) -> None:
+        """A real (non-symlink) AGENTS.md reports absent, not linked-ok."""
+        self._make_link(isolated_home, target_exists=True, real_file=True)
+        result = collect_diagnostics(
+            self._registry_work(),
+            version_probe=_fake_probe_ok(),
+        )
+        assert result.profiles[0].agents_link == "absent"
+
+    def test_happy_agents_link_in_json(
+        self,
+        isolated_home: Path,
+    ) -> None:
+        """to_dict carries the same agents_link field per profile."""
+        self._make_link(isolated_home, target_exists=True, real_file=False)
+        result = collect_diagnostics(
+            self._registry_work(),
+            version_probe=_fake_probe_ok(),
+        )
+        profiles = _PROFILES_ADAPTER.validate_python(result.to_dict()["profiles"])
+        prof = _PROFILE_ADAPTER.validate_python(profiles[0])
+        assert prof["agents_link"] == "linked-ok"

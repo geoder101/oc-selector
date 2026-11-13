@@ -22,8 +22,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from oc_selector import __version__
+from oc_selector.agents_link import is_identical_symlink, link_path
 from oc_selector.paths import (
     display_profile_directory,
+    global_agents_md_path,
     omo_config_path,
     registry_path,
     resolve_config_parent,
@@ -45,6 +47,9 @@ class ProfileDiagnostics:
     omo_profile: str | None
     status: str = "ok"
     issues: list[str] = field(default_factory=list)
+    # Per-profile ``AGENTS.md`` link status: ``"linked-ok"``, ``"dangling"`` or
+    # ``"absent"`` (see collect_diagnostics). Defaults to ``"absent"``.
+    agents_link: str = "absent"
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,6 +81,7 @@ class DiagnosticsResult:
                     "omo_profile": p.omo_profile,
                     "status": p.status,
                     "issues": p.issues,
+                    "agents_link": p.agents_link,
                 }
                 for p in self.profiles
             ],
@@ -126,6 +132,21 @@ def _is_executable(path: Path) -> bool:
 ProbeFn = Callable[[str, float], tuple[str | None, str]]
 
 
+def _agents_link_status(profile_dir: Path, global_path: Path) -> str:
+    """Return the per-profile ``AGENTS.md`` link status.
+
+    ``"linked-ok"`` when the link is an identical symlink to the global guard;
+    ``"dangling"`` when the link is a symlink whose target is absent;
+    ``"absent"`` otherwise (no link, or a real non-symlink file).
+    """
+    link = link_path(profile_dir)
+    if not link.is_symlink():
+        return "absent"
+    if not global_path.exists():
+        return "dangling"
+    return "linked-ok" if is_identical_symlink(link, global_path) else "absent"
+
+
 def collect_diagnostics(
     registry: Registry | None,
     *,
@@ -150,6 +171,7 @@ def collect_diagnostics(
     if registry is not None:
         default_profile = registry.default_profile
         opencode_exe = registry.opencode_executable
+        global_path = global_agents_md_path()
         for name, entry in registry.profiles.items():
             issues: list[str] = []
             if not resolve_profile_directory(parent, entry.directory).exists():
@@ -159,6 +181,10 @@ def collect_diagnostics(
                     name=name,
                     directory=display_profile_directory(parent, entry.directory),
                     omo_profile=entry.omo_profile,
+                    agents_link=_agents_link_status(
+                        resolve_profile_directory(parent, entry.directory),
+                        global_path,
+                    ),
                     status="warning" if issues else "ok",
                     issues=issues,
                 ),
