@@ -51,6 +51,7 @@ class ResourceEntry:
     postimage_hash: str | None = None
     existed: bool = False
     mode: int | None = None
+    symlink_target: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,6 +99,7 @@ class Transaction:
     _journal_path: Path
     _lock_path: Path
     _lock_fd: int | None
+    _created_dirs: set[str]
 
     def __init__(self, state_root: Path, operation: str) -> None:
         """Initialize a new transaction with a unique ID."""
@@ -110,6 +112,7 @@ class Transaction:
         self._journal_path = state_root / "journals" / f"{self._id}.json"
         self._lock_path = state_root / "maintenance.lock"
         self._lock_fd = None
+        self._created_dirs = set()
 
     @property
     def id(self) -> str:
@@ -201,6 +204,45 @@ class Transaction:
             ),
         )
 
+    def stage_symlink(self, destination: Path, target: Path) -> None:
+        """Stage a symlink to create at ``destination`` pointing at ``target``.
+
+        Records a preimage so ``commit`` can replace an existing link and
+        ``rollback`` can restore a pre-existing symlink or real file, or remove
+        a freshly-created link. ``target`` is stored verbatim (unresolved) so
+        the link is created eagerly and may dangle until the target appears.
+        """
+        existed = destination.is_symlink() or destination.exists()
+        preimage_hash: str | None = None
+        mode: int | None = None
+        if destination.is_symlink():
+            # Preimage of an existing symlink: hash of its readlink target
+            # bytes; the target string itself is backed up for recreation.
+            old_target = str(destination.readlink())
+            preimage_hash = _sha256_bytes(old_target.encode())
+            self._backup_preimage(destination.name, old_target.encode())
+        elif existed:
+            # Pre-existing real file: hash of bytes + mode, backed up so a
+            # rollback can restore it.
+            preimage_hash = _sha256_file(destination)
+            mode = destination.stat().st_mode & 0o777
+            self._backup_preimage(destination.name, destination.read_bytes())
+        self._resources.append(
+            ResourceEntry(
+                path=str(destination),
+                preimage_hash=preimage_hash,
+                existed=existed,
+                mode=mode,
+                symlink_target=str(target),
+            ),
+        )
+
+    def _backup_preimage(self, name: str, data: bytes) -> None:
+        """Persist a preimage under the private per-transaction backup dir."""
+        backup_dir = self._state_root / "backups" / self._id
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        (backup_dir / name).write_bytes(data)
+
     def commit(self) -> None:
         """Transition to COMMITTED: apply staged files, flush journal."""
         self._phase = JournalPhase.APPLYING
@@ -208,6 +250,9 @@ class Transaction:
         # Apply all staged files
         for res in self._resources:
             dst = Path(res.path)
+            if res.symlink_target is not None:
+                self._apply_symlink(res, dst, res.symlink_target)
+                continue
             staged = self._staging_dir / dst.name
             if staged.exists():
                 dst.parent.mkdir(parents=True, exist_ok=True)
@@ -224,10 +269,40 @@ class Transaction:
         self._write_journal()
         self._release_lock()
 
+    def _apply_symlink(self, res: ResourceEntry, dst: Path, target: str) -> None:
+        """Create the staged symlink at ``dst`` (mkdir parent, replace link).
+
+        Removes an existing non-identical symlink first; a pre-existing real
+        file is never removed here (``symlink_to`` raises, which the caller
+        handles). Every directory this call newly creates is tracked so
+        ``rollback`` can remove it.
+        """
+        parent = dst.parent
+        self._track_created_dir(parent)
+        parent.mkdir(parents=True, exist_ok=True)
+        if dst.is_symlink() and str(dst.readlink()) != target:
+            dst.unlink()
+        dst.symlink_to(target)
+        res.postimage_hash = _sha256_bytes(str(dst.readlink()).encode())
+
+    def _track_created_dir(self, target: Path) -> None:
+        """Record ``target`` and any missing ancestors for rollback cleanup."""
+        if target.exists():
+            return
+        current = target
+        while not current.exists():
+            self._created_dirs.add(str(current))
+            if current == current.parent:
+                break
+            current = current.parent
+
     def rollback(self) -> None:
         """Roll back: restore preimages, remove created files."""
         for res in self._resources:
             dst = Path(res.path)
+            if res.symlink_target is not None:
+                self._rollback_symlink(res, dst)
+                continue
             if res.existed and res.preimage_hash is not None:
                 # Restore from backup if available
                 backup = self._state_root / "backups" / self._id / dst.name
@@ -237,8 +312,41 @@ class Transaction:
                         dst.chmod(res.mode)
             elif not res.existed and dst.exists():
                 dst.unlink()
+        self._cleanup_created_dirs()
         self._cleanup_staging()
         self._release_lock()
+
+    def _rollback_symlink(self, res: ResourceEntry, dst: Path) -> None:
+        """Undo a staged symlink: restore the preimage or unlink the link.
+
+        A pre-existing symlink is recreated with its backed-up target; a
+        pre-existing real file is restored from its backup when the destination
+        currently holds a file (a commit that hit a real file never replaced
+        it). A freshly-created link is unlinked.
+        """
+        if res.existed:
+            backup = self._state_root / "backups" / self._id / dst.name
+            if backup.exists():
+                if dst.is_symlink():
+                    old_target = backup.read_text(
+                        encoding="utf-8",
+                        errors="surrogateescape",
+                    )
+                    dst.unlink()
+                    dst.symlink_to(old_target)
+                elif dst.exists():
+                    dst.write_bytes(backup.read_bytes())
+                    if res.mode is not None:
+                        dst.chmod(res.mode)
+        elif dst.is_symlink() or dst.exists():
+            dst.unlink()
+
+    def _cleanup_created_dirs(self) -> None:
+        """Remove directories this transaction newly created, if now empty."""
+        for dir_str in self._created_dirs:
+            directory = Path(dir_str)
+            if directory.exists() and not list(directory.iterdir()):
+                directory.rmdir()
 
     def _cleanup_staging(self) -> None:
         """Remove staging directory."""
@@ -273,21 +381,31 @@ def journal_to_dict(j: Journal) -> dict[str, object]:
         "id": j.id,
         "operation": j.operation,
         "phase": j.phase.value,
-        "resources": [
-            {
-                "path": r.path,
-                "preimage_hash": r.preimage_hash,
-                "postimage_hash": r.postimage_hash,
-                "existed": r.existed,
-                "mode": r.mode,
-            }
-            for r in j.resources
-        ],
+        "resources": [_resource_to_dict(r) for r in j.resources],
         "affected_profiles": j.affected_profiles,
         "pid": j.pid,
         "host": j.host,
         "timestamp": j.timestamp,
     }
+
+
+def _resource_to_dict(r: ResourceEntry) -> dict[str, object]:
+    """Serialize a ResourceEntry, omitting ``symlink_target`` when unset.
+
+    Byte-copy entries keep their exact historical key order (path,
+    preimage_hash, postimage_hash, existed, mode); a symlink entry appends
+    ``symlink_target`` last, matching ``ResourceRecord``/``JournalRecord``.
+    """
+    data: dict[str, object] = {
+        "path": r.path,
+        "preimage_hash": r.preimage_hash,
+        "postimage_hash": r.postimage_hash,
+        "existed": r.existed,
+        "mode": r.mode,
+    }
+    if r.symlink_target is not None:
+        data["symlink_target"] = r.symlink_target
+    return data
 
 
 class ResourceRecord(BaseModel):
@@ -305,6 +423,7 @@ class ResourceRecord(BaseModel):
     postimage_hash: str | None = None
     existed: bool = False
     mode: int | None = None
+    symlink_target: str | None = None
 
 
 class JournalRecord(BaseModel):
@@ -350,6 +469,7 @@ def read_journal(path: Path) -> Journal | None:
                 postimage_hash=r.postimage_hash,
                 existed=r.existed,
                 mode=r.mode,
+                symlink_target=r.symlink_target,
             )
             for r in record.resources
         ],

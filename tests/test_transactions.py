@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path  # noqa: TC003
+from typing import override
 
 import pytest
 from pydantic import TypeAdapter
@@ -34,6 +35,19 @@ from oc_selector.transactions import (
 _RESOURCES_ADAPTER: TypeAdapter[list[dict[str, object]]] = TypeAdapter(
     list[dict[str, object]],
 )
+
+
+class _RecordingTransaction(Transaction):
+    """Transaction that records each journal-write phase for assertions."""
+
+    def __init__(self, state_root: Path, operation: str) -> None:
+        super().__init__(state_root, operation)
+        self.recorded_phases: list[JournalPhase] = []
+
+    @override
+    def _write_journal(self) -> None:
+        self.recorded_phases.append(self.phase)
+        super()._write_journal()
 
 
 @pytest.fixture
@@ -207,6 +221,30 @@ class TestJournal:
         resources = _RESOURCES_ADAPTER.validate_python(d["resources"])
         assert resources[0]["path"] == "/tmp/test"
 
+    def test_happy_journal_to_dict_carries_symlink_target(self) -> None:
+        """A symlink resource carries symlink_target; byte-copy entries do not."""
+        j = Journal(
+            id="test-id",
+            operation="link",
+            phase=JournalPhase.PREPARED,
+            resources=[
+                ResourceEntry(
+                    path="/tmp/agents",
+                    existed=True,
+                    symlink_target="/tmp/target",
+                ),
+                ResourceEntry(path="/tmp/plain", existed=False),
+            ],
+            pid=1234,
+            host="testhost",
+            timestamp="2026-01-01T00:00:00",
+        )
+        d = journal_to_dict(j)
+        assert d["id"] == "test-id"
+        resources = _RESOURCES_ADAPTER.validate_python(d["resources"])
+        assert resources[0]["symlink_target"] == "/tmp/target"
+        assert "symlink_target" not in resources[1]
+
     def test_happy_read_missing_journal(self, tmp_path: Path) -> None:
         result = read_journal(tmp_path / "nonexistent.json")
         assert result is None
@@ -333,3 +371,150 @@ class TestFsyncDir:
     def test_happy_missing_path_swallowed(self, tmp_path: Path) -> None:
         """An OSError from opening the directory is swallowed silently."""
         assert _fsync_dir(tmp_path / "missing") is None
+
+
+class TestSymlinkTransactions:
+    """stage_symlink / commit / rollback for symlink resources."""
+
+    def test_happy_symlink_commits_as_symlink(
+        self,
+        state_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        """A staged symlink commits as a symlink pointing at the target."""
+        tx = Transaction(state_root, operation="test")
+        tx.begin()
+        target = tmp_path / "target.txt"
+        target.write_text("hello")
+        dst = tmp_path / "existing_dir" / "AGENTS.md"
+        dst.parent.mkdir(parents=True)
+        tx.stage_symlink(dst, target)
+        tx.commit()
+        assert dst.is_symlink() is True
+        assert str(dst.readlink()) == str(target)
+
+    def test_happy_symlink_rollback_removes_link_and_created_dir(
+        self,
+        state_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        """Rollback after a fresh create removes the link AND the dir it made."""
+        tx = Transaction(state_root, operation="test")
+        tx.begin()
+        target = tmp_path / "target.txt"
+        target.write_text("hello")
+        dst = tmp_path / "brand_new_dir" / "AGENTS.md"
+        assert not dst.parent.exists()
+        tx.stage_symlink(dst, target)
+        tx.commit()
+        assert dst.parent.exists()
+        tx.rollback()
+        assert not dst.exists()
+        assert not dst.parent.exists()
+
+    def test_happy_symlink_rollback_restores_preexisting_symlink(
+        self,
+        state_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        """Rollback restores a pre-existing symlink to its old target."""
+        old_target = tmp_path / "old_target.txt"
+        old_target.write_text("old")
+        dst = tmp_path / "dir" / "AGENTS.md"
+        dst.parent.mkdir(parents=True)
+        dst.symlink_to(str(old_target))
+        tx = Transaction(state_root, operation="test")
+        tx.begin()
+        new_target = tmp_path / "new_target.txt"
+        new_target.write_text("new")
+        tx.stage_symlink(dst, new_target)
+        tx.commit()
+        assert str(dst.readlink()) == str(new_target)
+        tx.rollback()
+        assert dst.is_symlink() is True
+        assert str(dst.readlink()) == str(old_target)
+
+    def test_happy_symlink_rollback_preserves_preexisting_real_file(
+        self,
+        state_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        """Commit never removes a real file; rollback leaves it intact."""
+        dst = tmp_path / "dir" / "AGENTS.md"
+        dst.parent.mkdir(parents=True)
+        dst.write_text("real content")
+        tx = Transaction(state_root, operation="test")
+        tx.begin()
+        target = tmp_path / "target.txt"
+        target.write_text("t")
+        tx.stage_symlink(dst, target)
+        with pytest.raises(FileExistsError):
+            tx.commit()
+        tx.rollback()
+        assert dst.is_symlink() is False
+        assert dst.read_text() == "real content"
+
+    def test_happy_symlink_rollback_keeps_nonempty_dir(
+        self,
+        state_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        """A tracked dir that is not empty is left intact on rollback."""
+        tx = Transaction(state_root, operation="test")
+        tx.begin()
+        target = tmp_path / "target.txt"
+        target.write_text("t")
+        dst = tmp_path / "newdir" / "AGENTS.md"
+        tx.stage_symlink(dst, target)
+        tx.commit()
+        (dst.parent / "other.txt").write_text("x")
+        tx.rollback()
+        assert not dst.exists()
+        assert dst.parent.exists()
+        assert (dst.parent / "other.txt").read_text() == "x"
+
+    def test_happy_symlink_journal_roundtrip(
+        self,
+        state_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        """A symlink resource survives a journal write/read with symlink_target."""
+        tx = Transaction(state_root, operation="link")
+        tx.begin()
+        target = tmp_path / "target.txt"
+        target.write_text("t")
+        dst = tmp_path / "dir" / "AGENTS.md"
+        tx.stage_symlink(dst, target)
+        tx.commit()
+        journal_path = state_root / "journals" / f"{tx.id}.json"
+        j = read_journal(journal_path)
+        assert j is not None
+        assert len(j.resources) == 1
+        res = j.resources[0]
+        assert res.symlink_target == str(target)
+        assert res.existed is False
+        assert res.path == str(dst)
+
+    def test_happy_commit_journal_phase_sequence(
+        self,
+        state_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        """Journal phase sequence for a symlink commit.
+
+        Pins the module's documented state machine so a stray tail leaking
+        into a helper (double COMMITTED/CLEANUP_COMPLETE) is caught.
+        """
+        tx = _RecordingTransaction(state_root, operation="link")
+        tx.begin()
+        target = tmp_path / "target.txt"
+        target.write_text("t")
+        dst = tmp_path / "dir" / "AGENTS.md"
+        tx.stage_symlink(dst, target)
+        tx.commit()
+        assert tx.recorded_phases == [
+            JournalPhase.PREPARED,
+            JournalPhase.APPLYING,
+            JournalPhase.COMMITTED,
+            JournalPhase.CLEANUP_COMPLETE,
+        ]

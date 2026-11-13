@@ -54,6 +54,17 @@ def omo_config_path() -> Path:
     return Path.home() / ".omo"
 
 
+def global_agents_md_path() -> Path:
+    """Return the global OpenCode guard path: ``<parent>/opencode/AGENTS.md``.
+
+    Resolved at call time from :func:`resolve_config_parent` (which honors
+    ``XDG_CONFIG_HOME``), so it equals ``~/.config/opencode/AGENTS.md`` when
+    XDG is unset — opencode's own global config-dir base. This helper only
+    resolves the path; it never reads or stats the file.
+    """
+    return resolve_config_parent() / "opencode" / "AGENTS.md"
+
+
 def profile_directory(parent: Path, name: str) -> Path:
     """Return the directory for a named profile under the config parent."""
     return parent / name
