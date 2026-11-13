@@ -402,6 +402,124 @@ directory = "default"
         assert reg.profiles["default"].directory == "default"
 
 
+class TestEditWizardAgentsLink:
+    """T6: edit --directory relinks the profile's AGENTS.md to the global guard."""
+
+    def test_relink_on_directory_change(
+        self,
+        isolated_home: Path,
+        registry_path: Path,
+        state_root: Path,
+    ) -> None:
+        """Directory change: old link gone, new link at new dir pointing at global."""
+        target = _global_guard(isolated_home)
+        # Create at the original directory (establishes the old link).
+        run_create_wizard(
+            CreateProfileInput(name="linked", directory="work"),
+            registry_path,
+            state_root,
+        )
+        old_dir = resolve_profile_directory(resolve_config_parent(), "work")
+        old_link = link_path(old_dir)
+        assert old_link.is_symlink()
+
+        inp = EditProfileInput(name="linked", directory="new-dir")
+        result = run_edit_wizard(inp, registry_path, state_root)
+        assert result.success is True
+        reg = load_registry(registry_path)
+        assert reg.profiles["linked"].directory == "new-dir"
+        assert not old_link.is_symlink()
+        new_dir = resolve_profile_directory(resolve_config_parent(), "new-dir")
+        new_link = link_path(new_dir)
+        assert new_link.is_symlink()
+        assert str(new_link.readlink()) == str(target.resolve())
+        assert result.agents_link is not None
+        assert result.agents_link == str(target)
+
+    def test_no_relink_without_directory_change(
+        self,
+        isolated_home: Path,
+        registry_path: Path,
+        state_root: Path,
+    ) -> None:
+        """Edit without a directory change: link untouched, agents_link None."""
+        _global_guard(isolated_home)
+        run_create_wizard(
+            CreateProfileInput(name="linked", directory="work"),
+            registry_path,
+            state_root,
+        )
+        old_dir = resolve_profile_directory(resolve_config_parent(), "work")
+        old_link = link_path(old_dir)
+        assert old_link.is_symlink()
+        before_target = str(old_link.readlink())
+
+        inp = EditProfileInput(name="linked", model="test/provider/model")
+        result = run_edit_wizard(inp, registry_path, state_root)
+        assert result.success is True
+        assert result.agents_link is None
+        assert old_link.is_symlink()
+        assert str(old_link.readlink()) == before_target
+
+    def test_dry_run_no_relink(
+        self,
+        isolated_home: Path,
+        registry_path: Path,
+        state_root: Path,
+    ) -> None:
+        """Dry-run edit with a directory change makes no link changes."""
+        _global_guard(isolated_home)
+        run_create_wizard(
+            CreateProfileInput(name="linked", directory="work"),
+            registry_path,
+            state_root,
+        )
+        old_dir = resolve_profile_directory(resolve_config_parent(), "work")
+        old_link = link_path(old_dir)
+        assert old_link.is_symlink()
+        before = registry_path.read_bytes()
+
+        inp = EditProfileInput(name="linked", directory="new-dir")
+        result = run_edit_wizard(inp, registry_path, state_root, dry_run=True)
+        assert result.success is True
+        assert result.agents_link is None
+        assert old_link.is_symlink()
+        new_dir = resolve_profile_directory(resolve_config_parent(), "new-dir")
+        assert not link_path(new_dir).exists()
+        assert registry_path.read_bytes() == before
+
+    def test_symlink_failure_keeps_old_link(
+        self,
+        isolated_home: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        registry_path: Path,
+        state_root: Path,
+    ) -> None:
+        """Symlink failure on relink: success=True, warning, OLD link intact."""
+        _global_guard(isolated_home)
+        run_create_wizard(
+            CreateProfileInput(name="linked", directory="work"),
+            registry_path,
+            state_root,
+        )
+        old_dir = resolve_profile_directory(resolve_config_parent(), "work")
+        old_link = link_path(old_dir)
+        assert old_link.is_symlink()
+
+        def _raise(*_args: object, **_kwargs: object) -> None:
+            raise PermissionError("simulated permission denied")
+
+        monkeypatch.setattr("os.symlink", _raise)
+        inp = EditProfileInput(name="linked", directory="new-dir")
+        result = run_edit_wizard(inp, registry_path, state_root)
+        assert result.success is True
+        assert result.agents_link is not None
+        assert "warning" in result.agents_link
+        assert old_link.is_symlink()
+        new_dir = resolve_profile_directory(resolve_config_parent(), "new-dir")
+        assert not link_path(new_dir).is_symlink()
+
+
 class TestSetDefault:
     def test_happy_set_default(
         self,

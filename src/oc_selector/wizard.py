@@ -17,7 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path  # noqa: TC003
 
-from oc_selector.agents_link import LinkResult, ensure_link
+from oc_selector.agents_link import LinkResult, ensure_link, link_path
 from oc_selector.errors import (
     ArgumentError,
     RegistryError,
@@ -117,6 +117,38 @@ def _link_status_fragment(result: LinkResult, global_path: Path) -> str:
     if result.status == "warn":
         return f"warning: {result.reason}"
     return str(global_path)
+
+
+def _relink_after_directory_change(
+    existing: ProfileEntry,
+    inp: EditProfileInput,
+) -> str | None:
+    """Relink the profile's AGENTS.md when the directory changed.
+
+    Returns the ``agents_link`` fragment, or ``None`` when the directory was
+    unchanged (no link step ran). Runs AFTER the registry commit via the
+    standalone primitive (warn-and-continue): a symlink failure yields a
+    ``warning: <reason>`` fragment and never fails the edit.
+
+    Half-move guard: the NEW link is created first; the OLD link is unlinked
+    only once it is confirmed created (``status != "warn"``). On ``"warn"`` (a
+    pre-existing real file, so the new link was not created) or an OSError, the
+    OLD link is left intact.
+    """
+    if inp.directory is None or inp.directory == existing.directory:
+        return None
+    old_dir = resolve_profile_directory(resolve_config_parent(), existing.directory)
+    new_dir = resolve_profile_directory(resolve_config_parent(), inp.directory)
+    global_path = global_agents_md_path()
+    try:
+        link_result = ensure_link(new_dir, global_path)
+    except OSError as exc:
+        return f"warning: {exc}"
+    if link_result.status != "warn":
+        old_link = link_path(old_dir)
+        if old_link.is_symlink():
+            old_link.unlink()
+    return _link_status_fragment(link_result, global_path)
 
 
 def run_create_wizard(
@@ -312,6 +344,7 @@ def run_edit_wizard(
 
     # Use transaction for mutation
     tx = Transaction(state_root, operation="edit")
+    link_fragment: str | None = None
     try:
         tx.begin()
         new_reg = Registry(
@@ -326,6 +359,12 @@ def run_edit_wizard(
         tmp_file.write_text(new_toml)
         tx.stage_file(tmp_file, registry_path)
         tx.commit()
+        # Relink the profile's AGENTS.md to the global guard when the
+        # directory changed. This runs AFTER the registry commit, via the
+        # standalone primitive (NOT the registry transaction), so a symlink
+        # failure never fails the edit and the registry is never left
+        # half-written.
+        link_fragment = _relink_after_directory_change(existing, inp)
     except (OSError, RegistryError) as exc:
         tx.rollback()
         return WizardResult(
@@ -341,6 +380,7 @@ def run_edit_wizard(
         success=True,
         profile_name=inp.name,
         message=f"Edited profile {inp.name!r}",
+        agents_link=link_fragment,
     )
 
 
