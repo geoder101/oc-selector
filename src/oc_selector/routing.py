@@ -101,6 +101,7 @@ edit PROFILE [--directory DIR] [--model MODEL] [--omo-profile OMO_PROFILE] [--dr
 delete PROFILE [--dry-run]
 set-default PROFILE [--dry-run]
 sync [PROFILE] [--all] [--dry-run]
+link [PROFILE] [--all] [--dry-run]
 upgrade-omo [PROFILE] [--version VERSION] [--all] [--dry-run]
 completion SHELL [--alias NAME]
 help [--version]
@@ -128,6 +129,7 @@ _GRAMMAR: dict[str, _CmdSpec] = {
     "delete": _CmdSpec(frozenset({"--dry-run"}), 1),
     "set-default": _CmdSpec(frozenset({"--dry-run"}), 1),
     "sync": _CmdSpec(frozenset({"--all", "--dry-run"}), 1),
+    "link": _CmdSpec(frozenset({"--all", "--dry-run"}), 1),
     "upgrade-omo": _CmdSpec(frozenset({"--version", "--all", "--dry-run"}), 1),
     "completion": _CmdSpec(frozenset({"--alias"}), 1),
     "help": _CmdSpec(frozenset({"--version"}), 0),
@@ -182,7 +184,7 @@ def validate_management_args(command: str, args: tuple[str, ...]) -> None:  # no
         )
 
     # PROFILE + --all is error 2
-    if command in ("sync", "upgrade-omo") and positionals and "--all" in args:
+    if command in ("sync", "upgrade-omo", "link") and positionals and "--all" in args:
         raise ArgumentError(f"{command!r}: cannot specify both PROFILE and --all")
 
     # Validate profile names in positionals
@@ -194,6 +196,7 @@ def validate_management_args(command: str, args: tuple[str, ...]) -> None:  # no
             "set-default",
             "sync",
             "upgrade-omo",
+            "link",
         ):
             try:
                 validate_profile_name(pos)

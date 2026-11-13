@@ -50,6 +50,7 @@ MANAGEMENT_NAMES: frozenset[str] = frozenset(
         "set-default",
         "sync",
         "upgrade-omo",
+        "link",
         "completion",
         "help",
         "info",

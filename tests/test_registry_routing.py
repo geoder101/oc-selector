@@ -426,6 +426,20 @@ class TestRouting:
         assert r.command == "delete"
         assert r.args == ("x",)
 
+    def test_happy_route_link(self) -> None:
+        reg = _make_registry()
+        r = route(["link"], reg)
+        assert isinstance(r, ManagementRoute)
+        assert r.command == "link"
+        assert r.args == ()
+
+    def test_happy_route_link_with_args(self) -> None:
+        reg = _make_registry()
+        r = route(["link", "gpt", "--all", "--dry-run"], reg)
+        assert isinstance(r, ManagementRoute)
+        assert r.command == "link"
+        assert r.args == ("gpt", "--all", "--dry-run")
+
     def test_happy_profile_tail_preserved(self) -> None:
         reg = _make_registry()
         r = route(["gpt", "--", "run", "--help"], reg)
@@ -519,6 +533,31 @@ class TestManagementGrammar:
 
     def test_happy_upgrade_omo_dry_run(self) -> None:
         validate_management_args("upgrade-omo", ("gpt", "--dry-run"))
+
+    def test_happy_link_profile(self) -> None:
+        validate_management_args("link", ("gpt",))
+
+    def test_happy_link_all(self) -> None:
+        validate_management_args("link", ("--all",))
+
+    def test_happy_link_dry_run(self) -> None:
+        validate_management_args("link", ("--dry-run",))
+
+    def test_failure_link_profile_and_all(self) -> None:
+        with pytest.raises(ArgumentError, match="both PROFILE and --all"):
+            validate_management_args("link", ("gpt", "--all"))
+
+    def test_failure_link_unknown_flag(self) -> None:
+        with pytest.raises(ArgumentError, match="Unsupported"):
+            validate_management_args("link", ("--nope",))
+
+    def test_failure_link_too_many_positionals(self) -> None:
+        with pytest.raises(ArgumentError, match="Too many"):
+            validate_management_args("link", ("a", "b"))
+
+    def test_failure_link_invalid_profile_name(self) -> None:
+        with pytest.raises(ArgumentError):
+            validate_management_args("link", ("Invalid-Name",))
 
     def test_failure_model_requires_value(self) -> None:
         with pytest.raises(ArgumentError, match="requires a value"):
