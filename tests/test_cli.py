@@ -346,6 +346,66 @@ class TestEditCommand:
         assert result.exit_code == 1
         assert "Profile 'ghost' not found" in result.output
 
+    def test_edit_symlink_failure_warns(
+        self,
+        isolated_home: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A symlink failure on edit relink surfaces a warning, not an error."""
+
+        def _raise_symlink(*_args: object) -> None:
+            raise PermissionError("denied")
+
+        monkeypatch.setattr("os.symlink", _raise_symlink)
+        _write_registry_under(
+            isolated_home / ".config",
+            Registry(
+                default_profile="default",
+                profiles={"default": ProfileEntry(directory="old-dir")},
+            ),
+        )
+        result = runner.invoke(app, ["edit", "default", "--directory", "new-dir"])
+        assert result.exit_code == 0
+        assert "Edited profile 'default'" in result.output
+        assert "warning" in result.output
+
+    def test_edit_unchanged_directory_has_no_link_fragment(
+        self,
+        isolated_home: Path,
+    ) -> None:
+        """Editing without changing the directory runs no link step, so no fragment."""
+        (isolated_home / ".config" / "opencode").mkdir(parents=True, exist_ok=True)
+        _write_registry_under(
+            isolated_home / ".config",
+            Registry(
+                default_profile="default",
+                profiles={"default": ProfileEntry(directory="same-dir")},
+            ),
+        )
+        result = runner.invoke(app, ["edit", "default", "--directory", "same-dir"])
+        assert result.exit_code == 0
+        assert "Edited profile 'default'" in result.output
+        assert "(" not in result.output
+
+    def test_edit_linked_shows_target(
+        self,
+        isolated_home: Path,
+    ) -> None:
+        """An edit that changes the directory links the new dir and shows the target."""
+        (isolated_home / ".config" / "opencode").mkdir(parents=True, exist_ok=True)
+        _write_registry_under(
+            isolated_home / ".config",
+            Registry(
+                default_profile="default",
+                profiles={"default": ProfileEntry(directory="old-dir")},
+            ),
+        )
+        result = runner.invoke(app, ["edit", "default", "--directory", "new-dir"])
+        assert result.exit_code == 0
+        assert "Edited profile 'default'" in result.output
+        assert "warning" not in result.output
+        assert str(global_agents_md_path()) in result.output
+
 
 class TestDelete:
     def test_happy_delete(self, setup_registry: Path) -> None:  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
