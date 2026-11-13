@@ -24,7 +24,11 @@ import oc_selector.cli as cli_module
 from oc_selector import __version__
 from oc_selector.cli import app, main
 from oc_selector.omo_upgrade import UpgradeResult
-from oc_selector.paths import resolve_config_parent
+from oc_selector.paths import (
+    global_agents_md_path,
+    resolve_config_parent,
+    resolve_profile_directory,
+)
 from oc_selector.registry import ProfileEntry, Registry, load_registry, registry_to_toml
 
 if TYPE_CHECKING:
@@ -633,6 +637,122 @@ class TestSyncCommand:
         error = "No package.json or pyproject.toml found"
         msg = f"default: No host package detected ({error})"
         assert msg in result.output
+
+
+@pytest.fixture
+def link_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
+    """Registry with two profiles plus isolated XDG paths.
+
+    Returns ``(registry_path, config_parent)``. The global guard is simulated by
+    the test writing ``<config_parent>/opencode/AGENTS.md``.
+    """
+    config_dir = tmp_path / "xdg-config"
+    (config_dir / "oc-selector").mkdir(parents=True)
+    reg = Registry(
+        default_profile="work",
+        profiles={
+            "work": ProfileEntry(directory="work-dir"),
+            "personal": ProfileEntry(directory="personal-dir"),
+        },
+    )
+    reg_path = config_dir / "oc-selector" / "config.toml"
+    reg_path.write_text(registry_to_toml(reg))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_dir))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    return reg_path, config_dir
+
+
+def _write_global_guard(config_dir: Path) -> Path:
+    global_path = config_dir / "opencode" / "AGENTS.md"
+    global_path.parent.mkdir(parents=True, exist_ok=True)
+    global_path.write_text("# global guard\n")
+    return global_path
+
+
+def _profile_link(config_parent: Path, directory: str) -> Path:
+    return resolve_profile_directory(config_parent, directory) / "AGENTS.md"
+
+
+class TestLinkCommand:
+    def test_happy_link_all_creates_symlinks(self, link_env: tuple[Path, Path]) -> None:
+        _, config_dir = link_env
+        _write_global_guard(config_dir)
+        result = runner.invoke(app, ["link", "--all"])
+        assert result.exit_code == 0
+        expected = str(global_agents_md_path().resolve())
+        for name in ("work", "personal"):
+            link = _profile_link(resolve_config_parent(), f"{name}-dir")
+            assert link.is_symlink()
+            assert str(link.readlink()) == expected
+
+    def test_link_single_profile(self, link_env: tuple[Path, Path]) -> None:
+        _, config_dir = link_env
+        _write_global_guard(config_dir)
+        result = runner.invoke(app, ["link", "personal"])
+        assert result.exit_code == 0
+        assert "personal: linked" in result.output
+        assert not _profile_link(resolve_config_parent(), "work-dir").is_symlink()
+
+    def test_link_missing_profile_exits_2(self, link_env: tuple[Path, Path]) -> None:
+        _, config_dir = link_env
+        _write_global_guard(config_dir)
+        result = runner.invoke(app, ["link", "ghost"])
+        assert result.exit_code == 2
+        assert "Profile 'ghost' not found" in result.output
+
+    def test_link_dry_run_changes_nothing(self, link_env: tuple[Path, Path]) -> None:
+        reg_path, config_dir = link_env
+        _write_global_guard(config_dir)
+        result = runner.invoke(app, ["link", "--all", "--dry-run"])
+        assert result.exit_code == 0
+        assert "would link" in result.output
+        for name in ("work", "personal"):
+            link = _profile_link(resolve_config_parent(), f"{name}-dir")
+            assert not link.is_symlink()
+        assert load_registry(reg_path).default_profile == "work"
+
+    def test_link_all_idempotent(self, link_env: tuple[Path, Path]) -> None:
+        _, config_dir = link_env
+        _write_global_guard(config_dir)
+        work_link = _profile_link(resolve_config_parent(), "work-dir")
+        assert runner.invoke(app, ["link", "--all"]).exit_code == 0
+        first_target = str(work_link.readlink())
+        second = runner.invoke(app, ["link", "--all"])
+        assert second.exit_code == 0
+        assert str(work_link.readlink()) == first_target
+
+    def test_link_profile_and_all_rejected(self, link_env: tuple[Path, Path]) -> None:
+        _, config_dir = link_env
+        _write_global_guard(config_dir)
+        result = runner.invoke(app, ["link", "work", "--all"])
+        assert result.exit_code == 2
+        assert "both PROFILE and --all" in result.output
+
+    def test_link_symlink_failure_warns_and_continues(
+        self,
+        link_env: tuple[Path, Path],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _, config_dir = link_env
+        _write_global_guard(config_dir)
+        real_symlink = os.symlink
+
+        def _selective_raise(
+            src: str,
+            dst: str,
+            target_is_directory: bool = False,  # noqa: FBT001, FBT002  # mirrors os.symlink
+        ) -> None:
+            # Fail only the "work" profile's link; "personal" still links.
+            if "work-dir" in str(dst):
+                raise PermissionError("denied")
+            real_symlink(src, dst, target_is_directory=target_is_directory)
+
+        monkeypatch.setattr("os.symlink", _selective_raise)
+        result = runner.invoke(app, ["link", "--all"])
+        assert result.exit_code == 0
+        assert "work: warning" in result.output
+        assert _profile_link(resolve_config_parent(), "personal-dir").is_symlink()
+        assert not _profile_link(resolve_config_parent(), "work-dir").is_symlink()
 
 
 class TestUpgradeOmo:

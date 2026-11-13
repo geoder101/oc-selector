@@ -26,6 +26,7 @@ import typer
 from pydantic import TypeAdapter, ValidationError
 
 from oc_selector import __version__
+from oc_selector.agents_link import decide_link, ensure_link
 from oc_selector.completion import extract_command_options, generate_completion
 from oc_selector.diagnostics import collect_diagnostics, probe_version
 from oc_selector.errors import OcSelectorError
@@ -35,6 +36,7 @@ from oc_selector.omo_upgrade import OmoSchema, run_omo_upgrade
 from oc_selector.paths import (
     default_profile_directory,
     display_profile_directory,
+    global_agents_md_path,
     omo_config_path,
     registry_path,
     resolve_config_parent,
@@ -411,6 +413,56 @@ def sync(
             )
     if failed:
         raise typer.Exit(1)
+
+
+@app.command()
+def link(
+    profile: Annotated[str | None, typer.Argument(help="Profile to link")] = None,
+    *,
+    all_profiles: Annotated[
+        bool,
+        typer.Option("--all", help="Link all profiles"),
+    ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Preview without writing"),
+    ] = False,
+) -> None:
+    """Link each profile's AGENTS.md to the global guard (idempotent).
+
+    Warns and continues on a per-profile symlink failure; never aborts the loop
+    and never fails the command for a link problem (exit stays 0). The registry
+    is read-only here.
+    """
+    if profile is not None and all_profiles:
+        _error_exit("cannot specify both PROFILE and --all", code=2)
+    parent, reg = _require_registry()
+    if all_profiles:
+        targets = list(reg.profiles.items())
+    else:
+        target_name = profile or reg.default_profile
+        if target_name not in reg.profiles:
+            _error_exit(f"Profile {target_name!r} not found", code=2)
+        targets = [(target_name, reg.profiles[target_name])]
+    global_path = global_agents_md_path()
+    for target_name, entry in targets:
+        profile_dir = resolve_profile_directory(parent, entry.directory)
+        if dry_run:
+            result = decide_link(profile_dir, global_path)
+            if result.status == "warn":
+                typer.echo(f"{target_name}: warning: {result.reason}", err=True)
+            else:
+                typer.echo(f"{target_name}: would link")
+            continue
+        try:
+            result = ensure_link(profile_dir, global_path)
+        except OSError as exc:
+            typer.echo(f"{target_name}: warning: {exc}", err=True)
+            continue
+        if result.status == "warn":
+            typer.echo(f"{target_name}: warning: {result.reason}", err=True)
+        else:
+            typer.echo(f"{target_name}: linked")
 
 
 @app.command("upgrade-omo")
