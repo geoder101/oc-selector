@@ -239,7 +239,8 @@ def create(  # noqa: PLR0913 - one parameter per CLI flag; the command surface i
     )
     result = run_create_wizard(inp, registry_path(), state_root(), dry_run=dry_run)
     if result.success:
-        typer.echo(result.message)
+        suffix = f" ({result.agents_link})" if result.agents_link is not None else ""
+        typer.echo(f"{result.message}{suffix}")
     else:
         _error_exit(result.error or result.message, code=result.exit_code)
 

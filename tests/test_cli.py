@@ -115,6 +115,14 @@ def _setup_home_profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     return "~/.config/oc-selector/profiles/standard"
 
 
+def _write_registry_under(config_parent: Path, reg: Registry) -> Path:
+    """Write ``reg`` to ``<config_parent>/oc-selector/config.toml`` and return it."""
+    reg_path = config_parent / "oc-selector" / "config.toml"
+    reg_path.parent.mkdir(parents=True, exist_ok=True)
+    reg_path.write_text(registry_to_toml(reg))
+    return reg_path
+
+
 def _profile_named(payload: dict[str, object], name: str) -> dict[str, object]:
     """Return the profile entry with the given name from a list/info JSON payload."""
     profiles = _PROFILES_ADAPTER.validate_python(payload["profiles"])
@@ -256,6 +264,80 @@ class TestCreateCommand:
             load_registry(setup_registry).profiles["prompted"].directory
             == "oc-selector/profiles/prompted"
         )
+
+    def test_create_dangling_when_global_absent(
+        self,
+        isolated_home: Path,
+    ) -> None:
+        """Create with no global guard surfaces a dangling link fragment."""
+        _write_registry_under(
+            isolated_home / ".config",
+            Registry(
+                default_profile="default",
+                profiles={"default": ProfileEntry(directory="default")},
+            ),
+        )
+        result = runner.invoke(app, ["create", "linked", "linked-dir"])
+        assert result.exit_code == 0
+        assert "Created profile 'linked'" in result.output
+        assert "dangling" in result.output
+
+    def test_create_symlink_failure_warns(
+        self,
+        isolated_home: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A symlink failure on create surfaces a warning fragment, not an error."""
+
+        def _raise_symlink(*_args: object) -> None:
+            raise PermissionError("denied")
+
+        monkeypatch.setattr("os.symlink", _raise_symlink)
+        _write_registry_under(
+            isolated_home / ".config",
+            Registry(
+                default_profile="default",
+                profiles={"default": ProfileEntry(directory="default")},
+            ),
+        )
+        result = runner.invoke(app, ["create", "linked", "linked-dir"])
+        assert result.exit_code == 0
+        assert "Created profile 'linked'" in result.output
+        assert "warning" in result.output
+
+    def test_create_linked_keeps_base_line(
+        self,
+        isolated_home: Path,
+    ) -> None:
+        """A linked create keeps the base line and appends the fragment."""
+        (isolated_home / ".config" / "opencode").mkdir(parents=True, exist_ok=True)
+        _write_registry_under(
+            isolated_home / ".config",
+            Registry(
+                default_profile="default",
+                profiles={"default": ProfileEntry(directory="default")},
+            ),
+        )
+        result = runner.invoke(app, ["create", "linked", "linked-dir"])
+        assert result.exit_code == 0
+        assert "Created profile 'linked'" in result.output
+
+    def test_create_dry_run_has_no_link_fragment(
+        self,
+        isolated_home: Path,
+    ) -> None:
+        """A dry run prints the preview line with no link fragment appended."""
+        _write_registry_under(
+            isolated_home / ".config",
+            Registry(
+                default_profile="default",
+                profiles={"default": ProfileEntry(directory="default")},
+            ),
+        )
+        result = runner.invoke(app, ["create", "linked", "linked-dir", "--dry-run"])
+        assert result.exit_code == 0
+        assert "would create" in result.output
+        assert "(" not in result.output
 
 
 class TestEditCommand:
