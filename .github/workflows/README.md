@@ -3,6 +3,15 @@
 This directory holds the three GitHub Actions workflows for `oc-selector`.
 This file is the map of what each workflow does; the YAML files are the truth.
 
+## Shared setup action
+
+`ci.yml` and `release.yml` bootstrap the toolchain (checkout, `setup-uv`,
+`setup-just`) through the composite action at
+[`.github/actions/setup`](.github/actions/setup/action.yml), so the pinned
+toolchain is declared and bumped in one place. Call it with
+`uses: ./.github/actions/setup`; pass `just-version: "1.59.0"` where `just`
+is needed.
+
 ## `ci.yml` — CI
 
 **Triggers:** `pull_request` and `push` (any branch).
