@@ -34,6 +34,11 @@ and take the default:
     $ oc-selector create fast --no-interactive
     Created profile 'fast'
 
+On success the message carries a ``(link fragment)`` suffix naming the
+``AGENTS.md`` link that was written, e.g. ``Created profile 'work' (profiles/work/AGENTS.md)``.
+The suffix is omitted when no link was made; it then reports the reason instead,
+such as ``... (link dangling: ...)`` or ``... (warning: ...)``.
+
 Preview with ``--dry-run``
 --------------------------
 
@@ -80,6 +85,11 @@ We preview an edit without writing:
 
     $ oc-selector edit work --directory other-dir --dry-run
     Dry run: would edit profile 'work' -> directory=other-dir, model=anthropic/claude-3
+
+On success the message carries a ``(link fragment)`` suffix naming the
+``AGENTS.md`` link that was written, e.g. ``Edited profile 'work' (profiles/work/AGENTS.md)``.
+The suffix is omitted when no link was made; it then reports the reason instead,
+such as ``... (link dangling: ...)`` or ``... (warning: ...)``.
 
 Associate an OMO profile
 ------------------------

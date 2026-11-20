@@ -46,9 +46,9 @@ it on a single line; it is shown here pretty-printed, with the
       "default_profile": "personal",
       "opencode": {"path": "opencode", "version": "1.2.3", "status": "ok"},
       "profiles": [
-        {"name": "default", "directory": "default", "omo_profile": null, "status": "ok", "issues": []},
-        {"name": "work", "directory": "work-dir", "omo_profile": "work-omo", "status": "ok", "issues": []},
-        {"name": "personal", "directory": "personal-dir", "omo_profile": null, "status": "ok", "issues": []}
+        {"name": "default", "directory": "default", "omo_profile": null, "status": "ok", "issues": [], "agents_link": "linked-ok"},
+        {"name": "work", "directory": "work-dir", "omo_profile": "work-omo", "status": "ok", "issues": [], "agents_link": "linked-ok"},
+        {"name": "personal", "directory": "personal-dir", "omo_profile": null, "status": "ok", "issues": [], "agents_link": "linked-ok"}
       ],
       "recovery": {"status": "pending", "transactions": ["..."]},
       "lock": {"status": "present", "pid": null, "host": null, "started_at": null},
