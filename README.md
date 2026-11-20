@@ -14,8 +14,6 @@ From a local clone of the repository (run at the repo root):
 
 ```bash
 uv tool install .   # recommended: isolated tool environment
-# or
-pip install .
 ```
 
 ## Quick Start
@@ -52,6 +50,7 @@ oc-selector --model openai/gpt-4 "fix the bug"
 | `oc-selector list [--json]` | List all registered profiles |
 | `oc-selector info [--json]` | Collect and display diagnostics |
 | `oc-selector sync [PROFILE] [--all] [--dry-run]` | Sync the host package into the selected profile's directory |
+| `oc-selector link [PROFILE] [--all] [--dry-run]` | Link each profile's AGENTS.md to the global guard (idempotent) |
 | `oc-selector upgrade-omo [PROFILE] [--version VERSION] [--all] [--dry-run]` | Upgrade the OMO config to a target version |
 | `oc-selector completion <shell> [--alias NAME]` | Generate shell completion |
 | `oc-selector help [--version]` | Show wrapper usage and the management grammar |
