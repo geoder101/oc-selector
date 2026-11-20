@@ -80,8 +80,4 @@ considering work done. `just cli <args>` runs the tool. See `just --list` (or th
 
 - `json-five` on PyPI **imports as `json5`**. `ModelLoader`/`ModelDumper` live in the
   `json5.loader` / `json5.dumper` submodules, **not** at the `json5` top level.
-- `httpx2` (extras `http2,brotli,zstd`) is a real dependency, kept **lazy**: used only
-  for commit-qualified native-schema downloads (bounded timeouts, redirects off,
-  fixed official origin/40-hex commit path, no provider requests, no network
-  schema-ref resolution).
 - `.venv` is local/committed-out; `uv.lock` **is** committed and authoritative.

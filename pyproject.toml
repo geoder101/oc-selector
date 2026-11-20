@@ -13,7 +13,6 @@ dependencies = [
     "json-five==1.1.2",
     "portalocker>=2.8",
     "jsonschema>=4.0",
-    "httpx2[http2,brotli,zstd]>=0.27",
 ]
 
 [project.scripts]
