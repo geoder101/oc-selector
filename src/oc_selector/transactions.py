@@ -4,7 +4,8 @@ Contract:
 
 - One portalocker exclusive lock at state root protects every mutation AND
   launch admission.
-- Bounded 5-second acquisition.
+- Non-blocking acquisition: if another process already holds the lock, the
+  transaction fails immediately (there is no wait and no timeout).
 - Journal state machine: prepared -> applying -> committed -> cleanup-complete.
 - Flush committed state BEFORE deleting ANY rollback material.
 - Recovery accepts only current content equal to recorded preimage/postimage.
@@ -145,7 +146,7 @@ class Transaction:
         except portalocker.LockException:
             os.close(self._lock_fd)
             raise MaintenanceError(
-                "Could not acquire maintenance lock (timeout)",
+                "Could not acquire maintenance lock (already held)",
             ) from None
 
     def _release_lock(self) -> None:

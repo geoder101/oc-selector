@@ -30,6 +30,7 @@ from oc_selector.registry import (
 )
 from oc_selector.transactions import (
     JournalPhase,
+    Transaction,
     find_pending_journals,
     read_journal,
 )
@@ -121,21 +122,30 @@ def run_init(
                 f"Cannot create config parent {parent}: {exc}",
             ) from exc
 
-    # Create empty registry if missing
+    # Create empty registry if missing (journaled, so an interrupted first write
+    # is recoverable like every other registry mutation).
     if not reg_path.exists():
+        # Minimal valid registry: one default profile
+        empty = Registry(
+            default_profile="default",
+            profiles={"default": ProfileEntry(directory="default")},
+        )
+        tx = Transaction(reg_path.parent, operation="init")
         try:
-            # Minimal valid registry: one default profile
-            empty = Registry(
-                default_profile="default",
-                profiles={"default": ProfileEntry(directory="default")},
-            )
-            reg_path.parent.mkdir(parents=True, exist_ok=True)
-            reg_path.write_text(registry_to_toml(empty))
-            created_registry = True
+            tx.begin()
+            staged = reg_path.parent / "staging" / tx.id / "config.toml"
+            staged.parent.mkdir(parents=True, exist_ok=True)
+            staged.write_text(registry_to_toml(empty))
+            tx.stage_file(staged, reg_path)
+            tx.commit()
         except OSError as exc:
+            tx.rollback()
             raise RegistryError(
                 f"Cannot create registry at {reg_path}: {exc}",
             ) from exc
+        finally:
+            tx.close()
+        created_registry = True
 
     return InitResult(
         config_parent=parent,
