@@ -4,7 +4,7 @@ Host-package sync is exact, no drift.
 Node/npm adapter detects and manages the host package.
 No author constants in installed src.
 No silent fallbacks.
-No network in sync (only local file operations).
+No direct network I/O in sync: a package manager reaches the network.
 No secret material in logs.
 No migration of legacy fields.
 All mutations go through transaction.
@@ -22,10 +22,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from oc_selector.errors import (
-    MaintenanceError,
-    NetworkError,
-)
+from oc_selector.errors import MaintenanceError
 from oc_selector.transactions import Transaction
 
 
@@ -191,12 +188,12 @@ def sync_host_package(
         except subprocess.TimeoutExpired:
             raise MaintenanceError("Package sync timed out") from None
         except FileNotFoundError:
-            raise NetworkError(
+            raise MaintenanceError(
                 f"Package manager not found: {cmd[0]}",
             ) from None
 
         tx.commit()
-    except (MaintenanceError, NetworkError) as exc:
+    except MaintenanceError as exc:
         tx.rollback()
         return SyncResult(
             success=False,
