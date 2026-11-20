@@ -80,12 +80,12 @@ source = ["oc_selector"]
 # recorded 93.5995623632385% with NO line-level exclusions for the
 # platform-unreachable lines (process.py win32/execve paths; cli.py dead
 # guards and the __main__ guard); those lines stay in the denominator as
-# uncovered. The only exclusion in this config is the line-level `case _:`
-# + `assert_never()` dead-code-guard regex below (a dead-code proof, not
-# untested behavior). Any future exclusion must be line-level only, never
-# whole-file/whole-function.
+# uncovered. The only exclusion is the line-level ``assert_never(...)``
+# dead-code-guard regex below (a dead-code proof, not untested behavior).
+# Any future exclusion must be line-level only, never whole-file/whole-function.
 exclude_also = [
-    # (?m:^[ \t]*case _:[ \t]*\r?\n[ \t]+assert_never\(
+    # Defensive: exhaustiveness dead-code guard.
+    'assert_never\(',
 ]
 
 [tool.coverage.html]
