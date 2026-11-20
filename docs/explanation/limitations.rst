@@ -48,14 +48,19 @@ Exit-code limitation on native-forward errors
 ---------------------------------------------
 
 The exit-code contract distinguishes a missing executable (127) and a
-non-executable file (126), and the launcher contains the corresponding code.
-**Today, neither code is ever produced.** On POSIX the launcher replaces the
-process with ``execve`` (so the 127 return is unreachable), and the
-missing-executable, non-executable, and invalid-registry cases are raised in
-the top-level dispatcher, which currently exits **1 with a traceback** instead
-of a clean classified exit. The verified behavior is documented in
-:doc:`/reference/exit-codes`; treat 126/127 as defined-but-unreachable until
-the dispatcher is fixed.
+non-executable file (126), and the launcher produces both codes cleanly. The
+dispatcher resolves the target executable with ``process.resolve_executable``
+*before* the native process is launched: it raises ``ExecutableMissingError``
+(exit 127) when the executable cannot be found and ``ExecutableNotExecutableError``
+(exit 126) when it exists but is not executable (see ``src/oc_selector/process.py``
+and ``src/oc_selector/errors.py``). Both exceptions are ``OcSelectorError``
+subclasses, so ``cli.main`` catches them and performs a clean classified exit —
+printing ``Error: {message}`` and raising ``SystemExit(exc.exit_code)`` with no
+stack trace. Because the resolution happens in Python before the native process
+launches, these codes are reachable and are not dependent on the ``execve``
+forward. An invalid registry is likewise clean: it exits **2** with a message,
+never a stack trace. The verified table is documented in
+:doc:`/reference/exit-codes`.
 
 Test coverage: what is covered and how
 --------------------------------------
