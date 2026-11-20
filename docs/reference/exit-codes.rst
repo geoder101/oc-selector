@@ -26,8 +26,8 @@ running command, not against the error-type definitions in the source.
 -----------
 
 A management command that completes normally exits 0 (``init``, ``create``,
-``edit``, ``set-default``, ``list``, ``info``, ``sync``, ``upgrade-omo``,
-``completion``, ``help``). ``info`` exits 0 even when the setup is unhealthy,
+``edit``, ``delete``, ``set-default``, ``link``, ``list``, ``info``, ``sync``,
+``upgrade-omo``, ``completion``, ``help``). ``info`` exits 0 even when the setup is unhealthy,
 because diagnostics are data, not errors.
 
 When a native command runs, the wrapper replaces itself with the native
