@@ -267,8 +267,8 @@ Options:
     OpenCode: 1.19.5
     Default profile: default
     Profiles: 2
-      default: warning
-      work: warning
+      default: ~/settings/default (ok, AGENTS.md: absent)
+      work: work-dir (warning, AGENTS.md: /home/u/.config/opencode/AGENTS.md)
 
 Exit codes: 0 (diagnostics are data, not errors).
 

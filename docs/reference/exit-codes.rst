@@ -102,8 +102,9 @@ The launcher distinguishes the two launcher-level failures and honors each
 error type's own code, exiting cleanly (no traceback):
 
 - **127 — missing executable.** Resolving ``opencode_executable`` finds no
-  regular file. ``main`` prints ``Error: Executable not found: <name>`` and
-  exits 127.
+  regular file. ``main`` prints ``Error: Executable not found in PATH: <name>``
+  for a command name absent from ``PATH`` (or
+  ``Error: Executable not found: <path>`` for an absolute path) and exits 127.
 - **126 — non-executable executable.** The resolved file is not executable.
   ``main`` prints ``Error: Not executable: <path>`` and exits 126.
 
