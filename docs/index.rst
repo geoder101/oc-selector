@@ -15,8 +15,6 @@ Installation
 From a local clone of the repository (run at the repo root)::
 
     uv tool install .   # recommended: isolated tool environment
-    # or
-    pip install .
 
 Quick start
 -----------

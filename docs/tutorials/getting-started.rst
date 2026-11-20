@@ -16,13 +16,11 @@ Install
 -------
 
 We install oc-selector from a local clone of the repository (run at the repo
-root) with pip or uv:
+root):
 
 .. code-block:: console
 
     $ uv tool install .   # recommended: isolated tool environment
-    # or
-    $ pip install .
 
 Initialize
 ----------
