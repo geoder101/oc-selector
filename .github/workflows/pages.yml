@@ -15,6 +15,7 @@ jobs:
   authorize:
     name: Authorize
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       sha: ${{ steps.authorize.outputs.sha }}
     steps:
@@ -52,6 +53,7 @@ jobs:
     name: Build
     needs: authorize
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
@@ -92,11 +94,13 @@ jobs:
         with:
           name: github-pages
           path: docs/_build/html
+          if-no-files-found: warn
 
   deploy:
     name: Deploy
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

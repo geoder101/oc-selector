@@ -12,6 +12,12 @@ toolchain is declared and bumped in one place. Call it with
 `uses: ./.github/actions/setup`; pass `just-version: "1.59.0"` where `just`
 is needed.
 
+## Job timeouts and artifact warnings
+
+Every job carries a `timeout-minutes` ceiling, and every upload uses
+`if-no-files-found: warn` so a missing artifact surfaces as a warning rather
+than a silent pass.
+
 ## `ci.yml` — CI
 
 **Triggers:** `pull_request` and `push` (any branch).

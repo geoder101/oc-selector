@@ -10,6 +10,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: ./.github/actions/setup
         with:
@@ -20,6 +21,7 @@ jobs:
   build:
     needs: test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: ./.github/actions/setup
       - run: uv build
@@ -27,10 +29,12 @@ jobs:
         with:
           name: dist
           path: dist/*
+          if-no-files-found: warn
 
   publish:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     environment: release
     steps:
