@@ -21,8 +21,9 @@ OMO config
 
 host package
     The package that ``sync`` installs into a profile's settings directory. It is
-    managed through the local node/npm toolchain; the sync is exact and
-    idempotent, with no network access.
+    detected from the profile's ``package.json`` (npm) or ``pyproject.toml``
+    (pip), and ``sync`` runs the matching package manager via a transaction to
+    install it.
 
 journal
     A record of a pending transaction, stored under the state root's
