@@ -33,6 +33,7 @@ The exact grammar, as printed by ``oc-selector help``:
     delete PROFILE [--dry-run]
     set-default PROFILE [--dry-run]
     sync [PROFILE] [--all] [--dry-run]
+    link [PROFILE] [--all] [--dry-run]
     upgrade-omo [PROFILE] [--version VERSION] [--all] [--dry-run]
     completion SHELL [--alias NAME]
     help [--version]
@@ -58,6 +59,8 @@ Command summary
 | ``info``       | Collect and display diagnostics                      |
 +----------------+------------------------------------------------------+
 | ``sync``       | Sync the host package for selected profiles          |
++----------------+------------------------------------------------------+
+| ``link``       | Link each profile's AGENTS.md to the global guard    |
 +----------------+------------------------------------------------------+
 | ``upgrade-omo``| Upgrade the OMO config to a target version           |
 +----------------+------------------------------------------------------+
@@ -292,6 +295,38 @@ Options:
 
 Exit codes: 0 on success; 2 when the registry is absent, the profile is unknown,
 or both ``PROFILE`` and ``--all`` are given; 1 when a package sync fails.
+
+link
+----
+
+.. code-block:: text
+
+    oc-selector link [PROFILE] [--all] [--dry-run]
+
+Link each profile's AGENTS.md to the global guard. The operation is idempotent;
+running it again leaves the symlink in place. A per-profile symlink failure is
+reported as a warning and the loop continues, so the command never fails for a
+link problem and the exit code stays 0. The registry is read-only.
+
+Arguments:
+
+- ``PROFILE`` (optional) — the profile to link.
+
+Options:
+
+- ``--all`` — link every profile.
+- ``--dry-run`` — preview without writing.
+
+``PROFILE`` and ``--all`` are mutually exclusive (exit 2).
+
+.. code-block:: console
+
+    $ oc-selector link
+    work: linked
+
+Exit codes: 0 on success; 2 when the registry is absent, the profile is unknown,
+or both ``PROFILE`` and ``--all`` are given; link problems are warnings and never
+change the exit code (it stays 0).
 
 upgrade-omo
 -----------
