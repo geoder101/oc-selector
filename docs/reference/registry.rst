@@ -87,9 +87,9 @@ Validation rules
 - **Name format.** Profile names must match ``[a-z][a-z0-9-]{0,47}`` — lowercase,
   starting with a letter, at most 48 characters.
 - **Reserved names.** Management command names (``list``, ``init``, ``create``,
-  ``edit``, ``set-default``, ``sync``, ``upgrade-omo``, ``completion``,
-  ``help``, ``info``), native OpenCode subcommand names (``run``, ``agent``,
-  ``auth``, ``mcp``, ...), and Windows device names (``con``, ``nul``,
+  ``edit``, ``delete``, ``set-default``, ``sync``, ``upgrade-omo``, ``link``,
+  ``completion``, ``help``, ``info``), native OpenCode subcommand names (``run``,
+  ``agent``, ``auth``, ``mcp``, ...), and Windows device names (``con``, ``nul``,
   ``com1``–``com9``, ``lpt1``–``lpt9``, ...) are rejected.
 - **Casefold collisions.** Two names that differ only by case are rejected.
 - **Duplicate directories.** Two profiles may not map to the same ``directory``.
@@ -114,16 +114,13 @@ invalid registry surface differently:
       Error: No registry found. Run 'oc-selector init' first.
 
 - **Invalid registry** (a file that fails validation) — the failure is raised
-  while the registry is loaded in the top-level dispatcher, so it exits 1 with a
-  traceback. The first line is the validation message, for example:
+  while the registry is loaded in the top-level dispatcher, so it exits 2 with a
+  clean ``Error:`` message and no stack trace, for example:
 
   .. code-block:: console
 
       $ oc-selector list
       Error: Unknown registry key: 'bogus_key'
-      Traceback (most recent call last):
-        ...
-      typer.exceptions.Exit: 2
 
   Some failures (unknown key) produce a short message; others (duplicate
   directory, a ``default_profile`` that is not defined, an unsupported
