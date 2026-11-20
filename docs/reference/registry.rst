@@ -13,8 +13,8 @@ The registry lives at::
 
 When ``XDG_CONFIG_HOME`` is unset, the parent defaults to ``~/.config``, so the
 registry is ``~/.config/oc-selector/config.toml``. A relative or empty
-``XDG_CONFIG_HOME`` is rejected. The state root (backups and journals) is the
-sibling directory ``$XDG_CONFIG_HOME/oc-selector``.
+``XDG_CONFIG_HOME`` is rejected. The state root (backups, journals, and the
+maintenance lock) is the registry file's parent directory, ``$XDG_CONFIG_HOME/oc-selector``.
 
 Complete example
 ----------------

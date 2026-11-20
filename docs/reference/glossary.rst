@@ -39,8 +39,8 @@ transaction
 
 state root
     The directory ``$XDG_CONFIG_HOME/oc-selector``. It holds the registry, the
-    backups, the journals, and the maintenance lock. It is the sibling of the
-    registry file's parent.
+    backups, the journals, and the maintenance lock. It is the parent of the
+    registry file (``config.toml`` lives inside it).
 
 default profile
     The profile selected when no profile name is given on the command line. It is
