@@ -88,7 +88,7 @@ jobs:
       - name: Build the docs site strictly
         run: just docs-check
       - name: Upload the docs site
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           name: github-pages
           path: docs/_build/html
@@ -104,15 +104,8 @@ jobs:
       pages: write
       id-token: write
     steps:
-      - name: Download the docs site
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: github-pages
-          path: docs/_build/html
-      - name: Configure Pages
-        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
-      - name: Deploy to GitHub Pages
+      - name: Deploy the docs site to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
         with:
-          path: docs/_build/html
+          artifact_name: github-pages
