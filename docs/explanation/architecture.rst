@@ -8,7 +8,7 @@ why the forwarding is byte-for-byte.
 The module map
 --------------
 
-The ``oc_selector`` package is 16 small, cohesive, typed modules. Each one
+The ``oc_selector`` package is 17 small, cohesive, typed modules. Each one
 documents its behavioral contract in its module docstring; the one-line roles
 below mirror those contracts.
 
@@ -42,6 +42,8 @@ below mirror those contracts.
 +-----------------+--------------------------------------------------------------+
 | ``wizard``      | Guided create/edit wizards and the registry-only             |
 |                 | ``set-default``.                                             |
++-----------------+--------------------------------------------------------------+
+| ``agents_link`` | Linking a profile's ``AGENTS.md`` to the global guard.       |
 +-----------------+--------------------------------------------------------------+
 | ``host_sync``   | Exact host-package sync: detects the package manager in a    |
 |                 | profile directory and runs the install inside a transaction. |
