@@ -19,9 +19,7 @@ considering work done. `just cli <args>` runs the tool. See `just --list` (or th
   `ruff check --fix` handles most; type-only imports (TC003) are manual. Every
   ignore is justified inline in `pyproject.toml` — do not add new ignores.
 - **basedpyright fails on warnings too, not just errors.** A clean gate = 0 errors
-  AND 0 warnings. It also **exits 3 if any `include` path is missing** — the
-  `typings/` dir must exist (`.gitkeep` is enough) or the gate dies with exit 3,
-  which is *not* a type error.
+  AND 0 warnings.
 - **Coverage is opt-in and out of `just check`** — run `just coverage` /
   `just coverage-check` explicitly; the 90% gate is not part of the single gate.
 - **The docs build is strict `-W` and pip-only** — any Sphinx warning fails

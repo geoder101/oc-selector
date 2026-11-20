@@ -111,7 +111,7 @@ markers = [
 [tool.basedpyright]
 pythonVersion = "3.12"
 typeCheckingMode = "all"
-include = ["src", "tests", "tools", "typings"]
+include = ["src", "tests", "tools"]
 # tests/ holds the helpers package and conftest; expose it as a source root so
 # `helpers.*` and `conftest` resolve as absolute imports (tests/ has no __init__).
 extraPaths = ["tests"]
