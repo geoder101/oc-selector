@@ -80,19 +80,6 @@ the `test` job and all other workflows stay read-only. The GitHub Release is gat
 on the default branch and the `release` environment; the `release` environment can
 additionally require a reviewer.
 
-## GitHub repository setup
-
-Before the first push, enable Actions and select **GitHub Actions** as the Pages
-source. Create the `github-pages` environment with a deployment branch rule for
-`main`. Create the `release` environment with the same branch rule and a required
-reviewer to provide human sign-off before publication.
-
-The default branch is `main`. Protect it against deletion and force pushes, require
-linear history and signed commits, and require the three `check` matrix results
-plus `coverage`. Enable rebase merging only; GitHub does not offer a true
-fast-forward-only pull-request merge mode. Initial branch creation and hosted
-verification happen after the repository owner approves the first push.
-
 ## Local smoke test with `act`
 
 Testing here is a two-layer strategy. The static policy tests in
