@@ -1,20 +1,17 @@
-# Composite action: set up the CI toolchain (checkout + uv + just).
+# Composite action: set up the CI toolchain (uv + just).
 #
 # Shared by ci.yml and release.yml so the pinned toolchain is declared in one
 # place and bumped in one step. Used inline with `uses: ./.github/actions/setup`
 # so the installed `uv` and `just` stay on PATH for the caller's `run:` steps.
+# Each consumer performs its OWN inline checkout before calling this.
 name: Set up toolchain
-description: Check out the event SHA and install the uv/just CI toolchain.
+description: Install the pinned uv and just CI toolchain on top of each consumer's inline checkout.
 
 inputs:
   python-version:
     description: Python version to install via setup-uv.
     required: false
     default: "3.12"
-  persist-credentials:
-    description: Disable persisted checkout credentials.
-    required: false
-    default: "false"
   just-version:
     description: Just version to install; leave empty to skip this step.
     required: false
@@ -23,11 +20,6 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Check out the event SHA
-      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        ref: ${{ github.sha }}
-        persist-credentials: ${{ inputs.persist-credentials }}
     - name: Set up uv
       uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
       with:
