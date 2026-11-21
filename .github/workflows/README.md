@@ -38,7 +38,7 @@ than a silent pass.
 
 ## `pages.yml` — Documentation Pages
 
-**Triggers:** `push` (any branch) and `workflow_dispatch`.
+**Triggers:** `push` to `main` and `workflow_dispatch`.
 
 | Job | Runs on | What it proves |
 |-----|---------|----------------|
@@ -51,11 +51,14 @@ queue rather than cancel each other.
 
 ### Pages authorization model
 
-- **Default-branch-only.** The `authorize` job compares the event ref against
+- **Default-branch-only.** The trigger fires on pushes to `main` only; the
+  `authorize` job additionally compares the event ref against
   `refs/heads/${{ github.event.repository.default_branch }}` and fails the run
-  for anything else.
-- **PRs never deploy.** `pull_request` is not an authorized event name; the
-  `authorize` job exits 1 for it. Pull requests run `ci.yml` only.
+  for anything else (this check also gates `workflow_dispatch` manual deploys
+  to the default branch).
+- **PRs never deploy.** `pages.yml` no longer triggers on `pull_request` (the
+  trigger is `main`-only), so pull requests build and deploy nothing; they are
+  checked by `ci.yml` only.
 - **The URL comes from deployment output.** The `deploy` job's
   `environment.url` is `steps.deployment.outputs.page_url`, so the canonical
   site URL is whatever GitHub Pages reports for the deployment — never an
