@@ -61,9 +61,9 @@ queue rather than cancel each other.
   site URL is whatever GitHub Pages reports for the deployment — never an
   invented or hardcoded value.
 - **Environment gate.** `deploy` runs in the `github-pages` environment, which
-  the repository owner restricts to the default branch (see the setup checklist
-  below). The job needs `pages: write` and `id-token: write`; the workflow-level
-  permission is `contents: read`.
+  the repository owner restricts to the default branch. The job needs
+  `pages: write` and `id-token: write`; the workflow-level permission is
+  `contents: read`.
 
 ## `release.yml` — Release
 
@@ -110,31 +110,3 @@ prints in that case is environmental, not a workflow problem.
 Maintenance note. When an action version is bumped, update its entry in the
 `EXPECTED_SHA/EXPECTED_TAG` tables in `tests/test_ci_workflows.py` alongside the
 workflow, or the SHA-pin test fails.
-
-## One-time owner setup (GitHub)
-
-Do these once, before the first hosted run:
-
-1. **Create and push the repository.** Push the default branch (`main`) to
-   GitHub.
-2. **Point Pages at Actions.** Repository **Settings → Pages → Source** =
-   **GitHub Actions**.
-3. **Create the `github-pages` environment.** **Settings → Environments → New
-   environment** named `github-pages`, with a branch restriction to the default
-   branch (`main`). This is the second authorization layer behind the
-   `authorize` job.
-4. **Create the `release` environment** (recommended: add a required reviewer).
-5. **First-run verification.** Push to `main` and confirm:
-   - `CI` is green on all three OS legs plus the coverage job;
-   - `Documentation Pages` is green through `authorize` → `build` → `deploy`,
-     and the `deploy` job's environment shows the site URL (the deployment
-     output URL);
-    - `Release` created the GitHub Release.
-
-## Honest status
-
-These workflows are **unverified on GitHub until the repository is actually
-pushed there.** Everything above is derived from the committed YAML. In
-particular, the 3-OS docs build (the `docs-check` step inside `just check` on
-the `ci.yml` matrix) is first verified on the **first hosted run** — local
-proof of the docs build is Linux-only.
