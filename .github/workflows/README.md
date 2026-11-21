@@ -102,11 +102,8 @@ export DOCKER_HOST=unix://run/podman.sock
 gh act -n -W .github/workflows/ci.yml -P default=catthehacker/ubuntu:22.04
 ```
 
-Sandbox caveat. Run this dry-run locally, not in hosted CI, and it needs the socket
-above. In a socket-less sandbox the dry-run cannot run, so `gh act -l` plus the
-static policy tests are the local gate. The docker-connection warning `gh act -l`
-prints in that case is environmental, not a workflow problem.
+## Keeping action pins in sync
 
-Maintenance note. When an action version is bumped, update its entry in the
-`EXPECTED_SHA/EXPECTED_TAG` tables in `tests/test_ci_workflows.py` alongside the
-workflow, or the SHA-pin test fails.
+Every hosted action is pinned to an immutable commit SHA. When you bump an action
+version, update its entry in the `EXPECTED_SHA/EXPECTED_TAG` tables in
+`tests/test_ci_workflows.py` alongside the workflow, or the SHA-pin test fails.
