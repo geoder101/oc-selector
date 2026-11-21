@@ -5,12 +5,16 @@ This file is the map of what each workflow does; the YAML files are the truth.
 
 ## Shared setup action
 
-`ci.yml` and `release.yml` bootstrap the toolchain (checkout, `setup-uv`,
-`setup-just`) through the composite action at
-[`.github/actions/setup`](.github/actions/setup/action.yml), so the pinned
-toolchain is declared and bumped in one place. Call it with
-`uses: ./.github/actions/setup`; pass `just-version: "1.59.0"` where `just`
-is needed.
+The composite action at [`.github/actions/setup`](.github/actions/setup/action.yml)
+now installs **only** the pinned toolchain (`setup-uv`, `setup-just`), declared and
+bumped in one place. It no longer checks out the code. Each consumer performs its
+**own** inline `actions/checkout@v7.0.1` at the event SHA first, then calls the
+composite with `uses: ./.github/actions/setup`. That split keeps the checkout pinned
+to an immutable SHA (enforced by `tests/test_ci_workflows.py`) while still sharing a
+single toolchain definition.
+
+Call it with `uses: ./.github/actions/setup`; pass `just-version: "1.59.0"` where
+`just` is needed.
 
 ## Job timeouts and artifact warnings
 
@@ -67,9 +71,45 @@ queue rather than cancel each other.
 
 | Job | Runs on | What it proves |
 |-----|---------|----------------|
-| `test` | `ubuntu-latest` | The single gate `just check` passes on the pushed commit before anything is built or published. |
-| `build` | `ubuntu-latest` | `uv build` produces the sdist and wheel; uploads them as the `dist` artifact. |
+| `release-test` | `ubuntu-latest` | The single gate `just check` passes on the pushed commit before anything is built or published. |
+| `release-build` | `ubuntu-latest` | `uv build` produces the sdist and wheel; uploads them as the `dist` artifact. |
 | `publish` | `ubuntu-latest` | Runs only on `push` to `refs/heads/main`, in the `release` environment. Creates (or updates, with `--clobber`) the GitHub Release tagged `v<version>` from the wheel filename. |
+
+## Local smoke test with `act`
+
+Testing here is a two-layer strategy. The static policy tests in
+`tests/test_ci_workflows.py` enforce the invariants that `act` cannot check: every
+hosted action is pinned to an immutable commit SHA with a matching release-tag
+comment, and no forbidden token leaks into a workflow. Those two tests are the
+authority on pinning. `act` is a complementary tool, it renders the workflows and
+lets you iterate locally before pushing.
+
+The verified commands, run from the repo root:
+
+- `gh act --version`: confirm `act` is installed.
+- `gh act -l`: enumerate every job across all three workflows. This is the local
+  gate. It must show each job once (no duplicate job names), which is how the
+  `release-test` / `release-build` disambiguation in the release workflow is
+  verified.
+- `gh act -n -W .github/workflows/ci.yml -P default=catthehacker/ubuntu:22.04`:
+  dry-run the CI workflow against a container image without touching GitHub.
+
+Container socket. `act` runs each job in a container, so the dry-run needs a
+reachable docker/podman socket. Point it at one with `DOCKER_HOST`, for example:
+
+```bash
+export DOCKER_HOST=unix://run/podman.sock
+gh act -n -W .github/workflows/ci.yml -P default=catthehacker/ubuntu:22.04
+```
+
+Sandbox caveat. Run this dry-run locally, not in hosted CI, and it needs the socket
+above. In a socket-less sandbox the dry-run cannot run, so `gh act -l` plus the
+static policy tests are the local gate. The docker-connection warning `gh act -l`
+prints in that case is environmental, not a workflow problem.
+
+Maintenance note. When an action version is bumped, update its entry in the
+`EXPECTED_SHA/EXPECTED_TAG` tables in `tests/test_ci_workflows.py` alongside the
+workflow, or the SHA-pin test fails.
 
 ## One-time owner setup (GitHub)
 
