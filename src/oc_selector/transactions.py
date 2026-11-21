@@ -457,7 +457,7 @@ def read_journal(path: Path) -> Journal | None:
     try:
         record = JournalRecord.model_validate(json.loads(path.read_text()))
         phase = JournalPhase(record.phase)
-    except (json.JSONDecodeError, ValidationError, ValueError):
+    except json.JSONDecodeError, ValidationError, ValueError:
         return None
     return Journal(
         id=record.id,

@@ -89,7 +89,7 @@ def detect_host_package(
                 path=pkg_json,
                 package_manager="npm",
             )
-        except (json.JSONDecodeError, OSError, ValidationError):
+        except json.JSONDecodeError, OSError, ValidationError:
             return None
 
     # Check for pyproject.toml (pip/uv)

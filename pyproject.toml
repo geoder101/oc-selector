@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Cross-platform command that selects registered OpenCode settings"
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.12"
+requires-python = ">=3.14,<3.15"
 dependencies = [
     "typer>=0.12",
     "rich>=13.0",
@@ -38,7 +38,7 @@ docs = [
 ]
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py314"
 line-length = 88
 
 [tool.ruff.lint]
@@ -108,7 +108,7 @@ markers = [
 ]
 
 [tool.basedpyright]
-pythonVersion = "3.12"
+pythonVersion = "3.14"
 typeCheckingMode = "all"
 include = ["src", "tests", "tools"]
 # tests/ holds the helpers package and conftest; expose it as a source root so

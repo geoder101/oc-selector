@@ -11,7 +11,7 @@ inputs:
   python-version:
     description: Python version to install via setup-uv.
     required: false
-    default: "3.12"
+    default: "3.14"
   just-version:
     description: Just version to install; leave empty to skip this step.
     required: false

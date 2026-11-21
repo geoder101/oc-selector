@@ -124,7 +124,7 @@ def run_omo_upgrade(
                 json.loads(config_path.read_text()),
             )
             current_version = str(current_data.get("version", "unknown"))
-        except (json.JSONDecodeError, OSError, ValidationError):
+        except json.JSONDecodeError, OSError, ValidationError:
             current_version = "unknown"
 
     # If no new config, just validate existing
