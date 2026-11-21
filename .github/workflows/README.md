@@ -38,12 +38,11 @@ than a silent pass.
 
 ## `pages.yml` — Documentation Pages
 
-**Triggers:** `push` to `main` and `workflow_dispatch`.
+**Triggers:** `push` to `main`.
 
 | Job | Runs on | What it proves |
 |-----|---------|----------------|
-| `authorize` | `ubuntu-latest` | The event is authorized: only `push` and `workflow_dispatch` events, only the repository's actual default branch (`refs/heads/<default_branch>`), and only a 40-character lowercase hex SHA. Emits the authorized SHA as a job output. |
-| `build` | `ubuntu-latest` | Checks out exactly the authorized SHA (`persist-credentials: false`), then proves the strict docs build (`just docs-check`, `-W`) passes. Uploads `docs/_build/html` as the `github-pages` artifact via `upload-pages-artifact`. |
+| `build` | `ubuntu-latest` | Checks out the event SHA (`persist-credentials: false`), then proves the strict docs build (`just docs-check`, `-W`) passes. Uploads `docs/_build/html` as the `github-pages` artifact via `upload-pages-artifact`. |
 | `deploy` | `ubuntu-latest` | Reads the `github-pages` artifact by name and deploys it via the `deploy-pages` action in the `github-pages` environment (no separate download or configure step). The site URL is the **deployment output** (`steps.deployment.outputs.page_url`), surfaced on the environment — it is not hardcoded anywhere. |
 
 **Concurrency:** group `github-pages`, `cancel-in-progress: false` — deployments
@@ -51,11 +50,9 @@ queue rather than cancel each other.
 
 ### Pages authorization model
 
-- **Default-branch-only.** The trigger fires on pushes to `main` only; the
-  `authorize` job additionally compares the event ref against
-  `refs/heads/${{ github.event.repository.default_branch }}` and fails the run
-  for anything else (this check also gates `workflow_dispatch` manual deploys
-  to the default branch).
+- **Default-branch-only.** The trigger fires on pushes to `main` only, so the
+  build and deploy run only on that push; pull requests and non-default
+  branches build and deploy nothing.
 - **PRs never deploy.** `pages.yml` does not trigger on `pull_request` (the
   trigger is `main`-only), so pull requests build and deploy nothing; they are
   checked by `ci.yml` only.

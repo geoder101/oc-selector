@@ -3,7 +3,6 @@ name: Documentation Pages
 on:
   push:
     branches: [main]
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -13,65 +12,21 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  authorize:
-    name: Authorize
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      sha: ${{ steps.authorize.outputs.sha }}
-    steps:
-      - name: Authorize the deployment event
-        id: authorize
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          EVENT_REF: ${{ github.ref }}
-          EVENT_SHA: ${{ github.sha }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-        run: |
-          set -euo pipefail
-          # Only push and workflow_dispatch events are authorized.
-          case "$EVENT_NAME" in
-            push | workflow_dispatch) ;;
-            *)
-              echo "::error::Unauthorized event name: $EVENT_NAME"
-              exit 1
-              ;;
-          esac
-          # Only the repository's actual default branch is authorized.
-          expected_ref="refs/heads/${DEFAULT_BRANCH}"
-          if [ "$EVENT_REF" != "$expected_ref" ]; then
-            echo "::error::Unauthorized ref: $EVENT_REF (expected $expected_ref)"
-            exit 1
-          fi
-          # The event SHA must be a 40-character lowercase hex string.
-          if ! [[ "$EVENT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "::error::Unauthorized SHA: $EVENT_SHA"
-            exit 1
-          fi
-          echo "sha=${EVENT_SHA}" >> "$GITHUB_OUTPUT"
-
   build:
     name: Build
-    needs: authorize
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read
     steps:
-      - name: Check out the authorized SHA
+      - name: Check out the event SHA
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.authorize.outputs.sha }}
+          ref: ${{ github.sha }}
           persist-credentials: false
-      - name: Set up uv
-        uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - uses: ./.github/actions/setup
         with:
-          python-version: "3.12"
-          enable-cache: true
-      - name: Set up just
-        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
-        with:
-          just-version: 1.59.0
+          just-version: "1.59.0"
       - name: Sync the locked environment
         run: just sync
       - name: Build the docs site strictly
