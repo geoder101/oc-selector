@@ -43,7 +43,7 @@ than a silent pass.
 | Job | Runs on | What it proves |
 |-----|---------|----------------|
 | `authorize` | `ubuntu-latest` | The event is authorized: only `push` and `workflow_dispatch` events, only the repository's actual default branch (`refs/heads/<default_branch>`), and only a 40-character lowercase hex SHA. Emits the authorized SHA as a job output. |
-| `build` | `ubuntu-latest` | Checks out exactly the authorized SHA (`persist-credentials: false`), verifies `HEAD` matches and the working tree is clean, then proves the strict docs build (`just docs-check`, `-W`) passes. Uploads `docs/_build/html` as the `github-pages` artifact via `upload-pages-artifact`. |
+| `build` | `ubuntu-latest` | Checks out exactly the authorized SHA (`persist-credentials: false`), then proves the strict docs build (`just docs-check`, `-W`) passes. Uploads `docs/_build/html` as the `github-pages` artifact via `upload-pages-artifact`. |
 | `deploy` | `ubuntu-latest` | Reads the `github-pages` artifact by name and deploys it via the `deploy-pages` action in the `github-pages` environment (no separate download or configure step). The site URL is the **deployment output** (`steps.deployment.outputs.page_url`), surfaced on the environment — it is not hardcoded anywhere. |
 
 **Concurrency:** group `github-pages`, `cancel-in-progress: false` — deployments
