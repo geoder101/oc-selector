@@ -15,7 +15,7 @@ inputs:
   just-version:
     description: Just version to install; leave empty to skip this step.
     required: false
-    default: ""
+    default: "1.59.0"
 
 runs:
   using: composite

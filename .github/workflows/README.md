@@ -14,7 +14,7 @@ checkout pinned to an immutable SHA (enforced by `tests/test_ci_workflows.py`) a
 toolchain versioned in a single place.
 
 Call it with `uses: ./.github/actions/setup`; pass `just-version: "1.59.0"` where
-`just` is needed.
+`just` is needed (it is the default, so most consumers omit it).
 
 ## Job timeouts and artifact warnings
 
@@ -28,8 +28,8 @@ than a silent pass.
 
 | Job | Runs on | What it proves |
 |-----|---------|----------------|
-| `test` — "Check (${{ matrix.os }})" | `ubuntu-latest`, `macos-latest`, `windows-latest` (matrix, `fail-fast: false`) | The single gate `just check` (lock-check, format-check, lint, typecheck, test, docs-check, build) passes on all three operating systems. This is also where the docs build is proven on macOS and Windows. |
-| `coverage` — "Coverage evidence" | `ubuntu-latest` | The fresh full-suite combined coverage gate (`just coverage-check`, fixed 90% threshold) passes. |
+| `check` | `ubuntu-latest` | The single gate `just check` (lock-check, format-check, lint, typecheck, test, docs-check, build) passes. |
+| `coverage` | `ubuntu-latest` | The fresh full-suite combined coverage gate (`just coverage-check`, fixed 90% threshold) passes. |
 
 **Artifact:** `coverage-${{ github.run_id }}-${{ github.run_attempt }}`, uploaded with
 `if: always()` so it exists even when the gate fails. Contents: `coverage/html/`
@@ -67,13 +67,17 @@ queue rather than cancel each other.
 
 ## `release.yml` — Release
 
-**Triggers:** `push` to `main` only. Workflow-level permission: `contents: write`.
+**Triggers:** `push` to `main` only. Workflow-level permission: `contents: read`.
 
 | Job | Runs on | What it proves |
 |-----|---------|----------------|
-| `release-test` | `ubuntu-latest` | The single gate `just check` passes on the pushed commit before anything is built or published. |
-| `release-build` | `ubuntu-latest` | `uv build` produces the sdist and wheel; uploads them as the `dist` artifact. |
-| `publish` | `ubuntu-latest` | Runs only on `push` to `refs/heads/main`, in the `release` environment. Creates (or updates, with `--clobber`) the GitHub Release tagged `v<version>` from the wheel filename. |
+| `test` | `ubuntu-latest` | The single gate `just check` passes on the pushed commit before anything is built or published. |
+| `publish` | `ubuntu-latest` | Runs only on `push` to `refs/heads/main`, in the `release` environment. Builds the wheel with `just build`, then creates (or updates, with `--clobber`) the GitHub Release tagged `v<version>` from the wheel filename using the repository's built-in token. |
+
+Only the `publish` job receives `contents: write` (required to open the release);
+the `test` job and all other workflows stay read-only. The GitHub Release is gated
+on the default branch and the `release` environment; the `release` environment can
+additionally require a reviewer.
 
 ## Local smoke test with `act`
 
@@ -88,9 +92,7 @@ The verified commands, run from the repo root:
 
 - `gh act --version`: confirm `act` is installed.
 - `gh act -l`: enumerate every job across all three workflows. This is the local
-  gate. It must show each job once (no duplicate job names), which is how the
-  `release-test` / `release-build` disambiguation in the release workflow is
-  verified.
+  gate. It must show each job once (no duplicate job names).
 - `gh act -n -W .github/workflows/ci.yml -P default=catthehacker/ubuntu:22.04`:
   dry-run the CI workflow against a container image without touching GitHub.
 
