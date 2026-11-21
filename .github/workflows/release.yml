@@ -8,21 +8,31 @@ permissions:
   contents: write
 
 jobs:
-  test:
+  release-test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - name: Check out the event SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - uses: ./.github/actions/setup
         with:
           just-version: "1.59.0"
       - run: just sync
       - run: just check
 
-  build:
-    needs: test
+  release-build:
+    needs: release-test
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - name: Check out the event SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - uses: ./.github/actions/setup
       - run: uv build
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -32,7 +42,7 @@ jobs:
           if-no-files-found: warn
 
   publish:
-    needs: build
+    needs: release-build
     runs-on: ubuntu-latest
     timeout-minutes: 20
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -53,11 +63,5 @@ jobs:
             gh release upload "$TAG" dist/* --clobber
           else
             gh release create "$TAG" dist/* \
-              --title "oc-selector $VERSION" \
-              --notes "Automated release from main."
+              --title "oc-selector $VERSION"
           fi
-      - name: Publish to PyPI
-        env:
-          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        run: |
-          uv run twine upload dist/* --skip-existing

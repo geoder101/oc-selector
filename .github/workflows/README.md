@@ -69,7 +69,7 @@ queue rather than cancel each other.
 |-----|---------|----------------|
 | `test` | `ubuntu-latest` | The single gate `just check` passes on the pushed commit before anything is built or published. |
 | `build` | `ubuntu-latest` | `uv build` produces the sdist and wheel; uploads them as the `dist` artifact. |
-| `publish` | `ubuntu-latest` | Runs only on `push` to `refs/heads/main`, in the `release` environment. Creates (or updates, with `--clobber`) the GitHub Release tagged `v<version>` from the wheel filename, then publishes to PyPI with `twine upload --skip-existing` using the `PYPI_API_TOKEN` secret. |
+| `publish` | `ubuntu-latest` | Runs only on `push` to `refs/heads/main`, in the `release` environment. Creates (or updates, with `--clobber`) the GitHub Release tagged `v<version>` from the wheel filename. |
 
 ## One-time owner setup (GitHub)
 
@@ -83,16 +83,13 @@ Do these once, before the first hosted run:
    environment** named `github-pages`, with a branch restriction to the default
    branch (`main`). This is the second authorization layer behind the
    `authorize` job.
-4. **Create the `release` environment** (recommended: add a required reviewer)
-   and add the **`PYPI_API_TOKEN`** repository secret
-   (**Settings → Secrets and variables → Actions**).
+4. **Create the `release` environment** (recommended: add a required reviewer).
 5. **First-run verification.** Push to `main` and confirm:
    - `CI` is green on all three OS legs plus the coverage job;
    - `Documentation Pages` is green through `authorize` → `build` → `deploy`,
      and the `deploy` job's environment shows the site URL (the deployment
      output URL);
-   - `Release` created the GitHub Release and uploaded to PyPI (or, if the
-     version was already published, skipped it via `--skip-existing`).
+    - `Release` created the GitHub Release.
 
 ## Honest status
 
