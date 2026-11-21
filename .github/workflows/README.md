@@ -6,12 +6,12 @@ This file is the map of what each workflow does; the YAML files are the truth.
 ## Shared setup action
 
 The composite action at [`.github/actions/setup`](.github/actions/setup/action.yml)
-now installs **only** the pinned toolchain (`setup-uv`, `setup-just`), declared and
-bumped in one place. It no longer checks out the code. Each consumer performs its
-**own** inline `actions/checkout@v7.0.1` at the event SHA first, then calls the
-composite with `uses: ./.github/actions/setup`. That split keeps the checkout pinned
-to an immutable SHA (enforced by `tests/test_ci_workflows.py`) while still sharing a
-single toolchain definition.
+installs the pinned toolchain (`setup-uv`, `setup-just`) and keeps it declared and
+bumped in one place. Each consumer performs its **own** `actions/checkout@v7.0.1` at
+the event SHA, then calls the composite with `uses: ./.github/actions/setup`. Keeping
+checkout inline in the consumers while sharing one toolchain definition keeps the
+checkout pinned to an immutable SHA (enforced by `tests/test_ci_workflows.py`) and the
+toolchain versioned in a single place.
 
 Call it with `uses: ./.github/actions/setup`; pass `just-version: "1.59.0"` where
 `just` is needed.
