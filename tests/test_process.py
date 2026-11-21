@@ -92,6 +92,7 @@ class TestResolveExecutable:
         with pytest.raises(ExecutableMissingError):
             resolve_executable("/nonexistent/path/to/binary")
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="POSIX execute-bit semantics")
     def test_failure_not_executable(self, tmp_path: Path) -> None:
         f = tmp_path / "notexec"
         f.write_text("data")
@@ -101,31 +102,25 @@ class TestResolveExecutable:
 
 
 class TestBuildLaunchEnv:
-    def test_happy_sets_config_dir(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("XDG_CONFIG_HOME", "/tmp/test-xdg")
+    def test_happy_sets_config_dir(self, isolated_home: Path) -> None:
         reg = _make_registry()
         env = build_launch_env(reg, "default", base_env={})
-        assert env["OPENCODE_CONFIG_DIR"] == "/tmp/test-xdg/opencode"
+        assert env["OPENCODE_CONFIG_DIR"] == str(isolated_home / ".config" / "opencode")
 
-    def test_happy_expands_tilde_config_dir(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_happy_expands_tilde_config_dir(self, isolated_home: Path) -> None:
         """A ~-prefixed profile directory is expanded for OPENCODE_CONFIG_DIR."""
-        monkeypatch.setenv("XDG_CONFIG_HOME", "/tmp/test-xdg")
-        monkeypatch.setenv("HOME", "/tmp/test-home")
         reg = Registry(
             schema_version=1,
             default_profile="default",
             profiles={"default": ProfileEntry(directory="~/conf")},
         )
         env = build_launch_env(reg, "default", base_env={})
-        assert env["OPENCODE_CONFIG_DIR"] == "/tmp/test-home/conf"
+        assert env["OPENCODE_CONFIG_DIR"] == str(isolated_home / "conf")
 
     def test_happy_unmanaged_preserves_omo(
         self,
-        monkeypatch: pytest.MonkeyPatch,
+        isolated_home: Path,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
     ) -> None:
-        monkeypatch.setenv("XDG_CONFIG_HOME", "/tmp/test-xdg")
         reg = _make_registry()
         base = {"OMO_PROFILE": "inherited-omo", "OCX_PROFILE": "inherited-ocx"}
         env = build_launch_env(reg, "default", base_env=base)
@@ -135,9 +130,8 @@ class TestBuildLaunchEnv:
 
     def test_happy_owned_sets_omo_clears_ocx(
         self,
-        monkeypatch: pytest.MonkeyPatch,
+        isolated_home: Path,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
     ) -> None:
-        monkeypatch.setenv("XDG_CONFIG_HOME", "/tmp/test-xdg")
         reg = _make_registry()
         base = {"OMO_PROFILE": "old-omo", "OCX_PROFILE": "old-ocx"}
         env = build_launch_env(reg, "gpt", base_env=base)
@@ -145,8 +139,10 @@ class TestBuildLaunchEnv:
         assert env["OMO_PROFILE"] == "oc-selector-gpt"
         assert "OCX_PROFILE" not in env
 
-    def test_happy_preserves_other_vars(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("XDG_CONFIG_HOME", "/tmp/test-xdg")
+    def test_happy_preserves_other_vars(
+        self,
+        isolated_home: Path,  # noqa: ARG002  # pyright: ignore[reportUnusedParameter]
+    ) -> None:
         reg = _make_registry()
         base = {"HOME": "/home/user", "OPENCODE_CONFIG": "custom", "PATH": "/usr/bin"}
         env = build_launch_env(reg, "default", base_env=base)
@@ -236,6 +232,7 @@ class TestResolveExecutablePath:
             resolve_executable("ocx-no-such-binary")
         assert excinfo.value.exit_code == 127
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="POSIX execute-bit semantics")
     def test_failure_found_but_not_executable(
         self,
         monkeypatch: pytest.MonkeyPatch,
@@ -402,6 +399,7 @@ class TestLaunchWindows:
         assert launch_native(route, registry) == 130
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX execve semantics")
 class TestLaunchPosix:
     """The posix branch: os.execve replaces the calling process image."""
 

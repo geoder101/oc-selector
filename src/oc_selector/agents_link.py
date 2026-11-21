@@ -43,10 +43,14 @@ def link_path(profile_config_dir: Path) -> Path:
 def is_identical_symlink(link: Path, target: Path) -> bool:
     """Return ``True`` iff ``link`` is a symlink whose target equals ``target``.
 
-    The comparison is against ``str(target)``; callers pass the same (absolute)
-    form that was used to create the link.
+    Resolve the stored target to normalize Windows extended-length path prefixes.
+    Relative targets are interpreted from the link's parent, including dangling
+    targets, rather than from the working directory.
     """
-    return link.is_symlink() and str(link.readlink()) == str(target)
+    return (
+        link.is_symlink()
+        and (link.parent / link.readlink()).resolve() == target.resolve()
+    )
 
 
 def decide_link(profile_config_dir: Path, target: Path) -> LinkResult:

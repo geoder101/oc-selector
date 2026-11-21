@@ -47,9 +47,8 @@ FIXTURES = Path(__file__).parent / "fixtures" / "registry"
 
 
 class TestPaths:
-    def test_happy_xdg_config_parent(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("XDG_CONFIG_HOME", "/tmp/test-xdg")
-        assert resolve_config_parent() == Path("/tmp/test-xdg")
+    def test_happy_xdg_config_parent(self, isolated_home: Path) -> None:
+        assert resolve_config_parent() == isolated_home / ".config"
 
     def test_happy_default_parent(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
@@ -69,13 +68,13 @@ class TestPaths:
         with pytest.raises(RegistryError, match="empty"):
             resolve_config_parent()
 
-    def test_happy_state_root(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("XDG_CONFIG_HOME", "/tmp/test-xdg")
-        assert state_root() == Path("/tmp/test-xdg/oc-selector")
+    def test_happy_state_root(self, isolated_home: Path) -> None:
+        assert state_root() == isolated_home / ".config" / "oc-selector"
 
-    def test_happy_registry_path(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("XDG_CONFIG_HOME", "/tmp/test-xdg")
-        assert registry_path() == Path("/tmp/test-xdg/oc-selector/config.toml")
+    def test_happy_registry_path(self, isolated_home: Path) -> None:
+        assert (
+            registry_path() == isolated_home / ".config" / "oc-selector" / "config.toml"
+        )
 
     def test_happy_omo_path_uses_home(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("XDG_CONFIG_HOME", "/tmp/test-xdg")

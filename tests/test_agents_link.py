@@ -114,7 +114,7 @@ class TestEnsureLink:
         assert result.status == "ok"
         link = link_path(profile)
         assert link.is_symlink() is True
-        assert str(link.readlink()) == str(target.resolve())
+        assert link.readlink().resolve() == target.resolve()
 
     def test_dry_run_is_noop(self, isolated_home: Path) -> None:
         target = _make_target(isolated_home)
@@ -143,7 +143,7 @@ class TestEnsureLink:
         assert result.status == "dangling"
         link = link_path(profile)
         assert link.is_symlink() is True
-        assert str(link.readlink()) == str(target.resolve())
+        assert link.readlink().resolve() == target.resolve()
 
     def test_preserves_pre_existing_real_file(self, isolated_home: Path) -> None:
         target = _make_target(isolated_home)
@@ -167,4 +167,4 @@ class TestEnsureLink:
         link.symlink_to(str(other))
         result = ensure_link(profile, target)
         assert result.status == "ok"
-        assert str(link.readlink()) == str(target.resolve())
+        assert link.readlink().resolve() == target.resolve()

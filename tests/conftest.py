@@ -39,9 +39,8 @@ class HomeGuard:
         assert resolved.is_relative_to(self.isolated_home.resolve()), (
             f"path {path} escapes the isolated home"
         )
-        assert not resolved.is_relative_to(self.real_home.resolve()), (
-            f"path {path} touches the real home"
-        )
+        # Windows temp directories can be nested inside the real user profile.
+        # Only the explicitly isolated subtree is permitted by the check above.
 
 
 @pytest.fixture

@@ -20,6 +20,7 @@ from collections.abc import Callable
 from pathlib import Path  # noqa: TC003
 from typing import TYPE_CHECKING
 
+import pytest
 from pydantic import TypeAdapter
 
 from oc_selector.diagnostics import collect_diagnostics, probe_version
@@ -33,7 +34,6 @@ _PROFILES_ADAPTER: TypeAdapter[list[dict[str, object]]] = TypeAdapter(
 if TYPE_CHECKING:
     from subprocess import CompletedProcess
 
-    import pytest
     from helpers.process_harness import ProcessHarness
 
 ProbeFn = Callable[[str, float], tuple[str | None, str]]
@@ -294,6 +294,7 @@ class TestProbeVersion:
         """An absolute path that does not exist reports missing."""
         assert probe_version(str(tmp_path / "nope")) == (None, "missing")
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="POSIX execute-bit semantics")
     def test_happy_not_executable(self, tmp_path: Path) -> None:
         """An existing file without the execute bit reports not_executable."""
         target = tmp_path / "plain"
@@ -319,11 +320,15 @@ class TestProbeVersion:
 
     def test_happy_timeout(self, process_harness: ProcessHarness) -> None:
         """A probe exceeding the timeout reports timeout."""
-        slow = process_harness.bin_dir / "slow"
-        slow.write_text(
+        script = process_harness.bin_dir / "slow.py"
+        script.write_text(
             f"#!{sys.executable}\nimport time\ntime.sleep(2)\n",
             encoding="utf-8",
         )
+        slow = script
+        if sys.platform == "win32":
+            slow = script.with_suffix(".bat")
+            slow.write_text(f'@echo off\n"{sys.executable}" "{script}"\n')
         slow.chmod(0o700)
         assert probe_version(str(slow), timeout=0.2) == (None, "timeout")
 
@@ -359,6 +364,7 @@ class TestIsExecutable:
         exe.chmod(0o755)
         assert _is_executable(exe) is True
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="POSIX execute-bit semantics")
     def test_failure_non_regular_or_no_xok(self, tmp_path: Path) -> None:
         """A non-executable file and a directory are not executable."""
         from oc_selector.diagnostics import _is_executable  # pyright: ignore[reportPrivateUsage]  # noqa: PLC0415

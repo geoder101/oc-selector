@@ -182,6 +182,7 @@ class TestPaths:
     ) -> None:
         """~ expands, absolute is verbatim, relative resolves under the parent."""
         monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
         parent = Path("/cfg")
         assert resolve_profile_directory(parent, "work") == Path("/cfg/work")
         assert resolve_profile_directory(
@@ -203,6 +204,7 @@ class TestPaths:
         """~ resolves and is abbreviated; outside-home paths are shown in full."""
         home = tmp_path / "home"
         monkeypatch.setenv("HOME", str(home))
+        monkeypatch.setenv("USERPROFILE", str(home))
         parent = home / ".config"
         # Relative under the (home) parent abbreviates to ~/...
         assert display_profile_directory(parent, "oc-selector/profiles/standard") == (

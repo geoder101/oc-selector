@@ -821,11 +821,11 @@ class TestLinkCommand:
         _write_global_guard(config_dir)
         result = runner.invoke(app, ["link", "--all"])
         assert result.exit_code == 0
-        expected = str(global_agents_md_path().resolve())
+        expected = global_agents_md_path().resolve()
         for name in ("work", "personal"):
             link = _profile_link(resolve_config_parent(), f"{name}-dir")
             assert link.is_symlink()
-            assert str(link.readlink()) == expected
+            assert link.readlink().resolve() == expected
 
     def test_link_single_profile(self, link_env: tuple[Path, Path]) -> None:
         _, config_dir = link_env
@@ -1123,6 +1123,7 @@ class TestMainDispatch:
         # A missing executable is honored as its class's code (127), cleanly.
         assert excinfo.value.code == 127
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="POSIX execute-bit semantics")
     def test_failure_raw_executable_non_executable(
         self,
         setup_registry: Path,

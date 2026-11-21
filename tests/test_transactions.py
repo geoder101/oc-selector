@@ -276,7 +276,7 @@ class TestJournal:
         )
         journal_path = state_root / "journals" / "golden.json"
         journal_path.parent.mkdir(parents=True, exist_ok=True)
-        journal_path.write_text(json.dumps(journal_to_dict(j), indent=2))
+        journal_path.write_text(json.dumps(journal_to_dict(j), indent=2), newline="\n")
         golden = (
             "{\n"
             '  "id": "golden-id",\n'
@@ -396,7 +396,7 @@ class TestSymlinkTransactions:
         tx.stage_symlink(dst, target)
         tx.commit()
         assert dst.is_symlink() is True
-        assert str(dst.readlink()) == str(target)
+        assert dst.readlink().resolve() == target.resolve()
 
     def test_happy_symlink_rollback_removes_link_and_created_dir(
         self,
@@ -434,10 +434,10 @@ class TestSymlinkTransactions:
         new_target.write_text("new")
         tx.stage_symlink(dst, new_target)
         tx.commit()
-        assert str(dst.readlink()) == str(new_target)
+        assert dst.readlink().resolve() == new_target.resolve()
         tx.rollback()
         assert dst.is_symlink() is True
-        assert str(dst.readlink()) == str(old_target)
+        assert dst.readlink().resolve() == old_target.resolve()
 
     def test_happy_symlink_rollback_preserves_preexisting_real_file(
         self,
