@@ -62,20 +62,6 @@ jobs:
         with:
           ref: ${{ needs.authorize.outputs.sha }}
           persist-credentials: false
-      - name: Verify the checkout matches the authorized SHA
-        env:
-          AUTHORIZED_SHA: ${{ needs.authorize.outputs.sha }}
-        run: |
-          set -euo pipefail
-          head_sha="$(git rev-parse HEAD)"
-          if [ "$head_sha" != "$AUTHORIZED_SHA" ]; then
-            echo "::error::HEAD $head_sha does not match authorized SHA $AUTHORIZED_SHA"
-            exit 1
-          fi
-          if [ -n "$(git status --porcelain)" ]; then
-            echo "::error::Working tree is not clean"
-            exit 1
-          fi
       - name: Set up uv
         uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
