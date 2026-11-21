@@ -56,7 +56,7 @@ queue rather than cancel each other.
   `refs/heads/${{ github.event.repository.default_branch }}` and fails the run
   for anything else (this check also gates `workflow_dispatch` manual deploys
   to the default branch).
-- **PRs never deploy.** `pages.yml` no longer triggers on `pull_request` (the
+- **PRs never deploy.** `pages.yml` does not trigger on `pull_request` (the
   trigger is `main`-only), so pull requests build and deploy nothing; they are
   checked by `ci.yml` only.
 - **The URL comes from deployment output.** The `deploy` job's
