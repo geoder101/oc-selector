@@ -14,6 +14,7 @@ import json
 from pathlib import Path  # noqa: TC003
 
 import pytest
+from pydantic import TypeAdapter
 
 from oc_selector.errors import RegistryError, TransactionError
 from oc_selector.init_flow import (
@@ -25,7 +26,7 @@ from oc_selector.init_flow import (
     run_recovery_all,
 )
 from oc_selector.registry import load_registry
-from oc_selector.transactions import JournalPhase
+from oc_selector.transactions import JournalPhase, Transaction
 
 
 class TestRunInit:
@@ -147,41 +148,21 @@ class TestRunRecovery:
         assert result.journal_id == "rec-test"
 
     def test_happy_recover_restores_preimage(self, tmp_path: Path) -> None:
-        journals_dir = tmp_path / "journals"
-        journals_dir.mkdir()
         target = tmp_path / "target.txt"
-        target.write_text("corrupted")
-        backup = tmp_path / "target.txt.bak"
-        backup.write_text("original")
-        journal_data: dict[str, object] = {
-            "id": "rec-restore",
-            "operation": "edit",
-            "phase": "prepared",
-            "resources": [
-                {
-                    "path": str(target),
-                    "preimage_hash": "abc123",
-                    "existed": True,
-                },
-                # Skipped: never existed, so no preimage to restore.
-                {
-                    "path": str(tmp_path / "never-existed"),
-                    "existed": False,
-                },
-                # Skipped: preimage recorded but the backup file is absent.
-                {
-                    "path": str(tmp_path / "no-backup"),
-                    "preimage_hash": "def456",
-                    "existed": True,
-                },
-            ],
-            "affected_profiles": ["default"],
-            "pid": 0,
-            "host": "test",
-            "timestamp": "2025-01-01T00:00:00Z",
-        }
-        jpath = journals_dir / "rec-restore.json"
-        jpath.write_text(json.dumps(journal_data))
+        target.write_text("original")
+        source = tmp_path / "source.txt"
+        source.write_text("replacement")
+        tx = Transaction(tmp_path, operation="edit")
+        tx.begin()
+        tx.stage_file(source, target)
+        # Interrupt after APPLYING was persisted and a destination changed.
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr(tx, "_cleanup_staging", lambda: None)
+            tx.commit()
+        jpath = tmp_path / "journals" / f"{tx.id}.json"
+        data = TypeAdapter(dict[str, object]).validate_json(jpath.read_text())
+        data["phase"] = "applying"
+        jpath.write_text(json.dumps(data))
         result = run_recovery(jpath, state_dir=tmp_path)
         assert result.recovered is True
         assert target.read_text() == "original"
@@ -214,7 +195,7 @@ class TestRunRecovery:
         jpath = journals_dir / "rec-fail.json"
         jpath.write_text(json.dumps(journal_data))
         try:
-            with pytest.raises(TransactionError, match="Cannot restore"):
+            with pytest.raises(TransactionError, match="Missing or invalid backup"):
                 run_recovery(jpath, state_dir=tmp_path)
         finally:
             ro_dir.chmod(0o700)
@@ -277,4 +258,4 @@ class TestRunRecoveryAll:
         assert results[0].recovered is False
         assert results[0].journal_id == "batch-fail"
         assert results[0].error is not None
-        assert "Cannot restore" in results[0].error
+        assert "Missing or invalid backup" in results[0].error

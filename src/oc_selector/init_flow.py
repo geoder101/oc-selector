@@ -13,10 +13,11 @@ No migration of legacy fields.
 
 from __future__ import annotations
 
-import contextlib
-import shutil
 from dataclasses import dataclass
-from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 from oc_selector.errors import (
     RegistryError,
@@ -32,7 +33,6 @@ from oc_selector.transactions import (
     JournalPhase,
     Transaction,
     find_pending_journals,
-    read_journal,
 )
 
 
@@ -133,6 +133,15 @@ def run_init(
         tx = Transaction(reg_path.parent, operation="init")
         try:
             tx.begin()
+            if reg_path.exists():
+                tx.rollback()
+                return InitResult(
+                    config_parent=parent,
+                    registry_path=reg_path,
+                    created_parent=created_parent,
+                    created_registry=False,
+                    already_initialized=True,
+                )
             staged = reg_path.parent / "staging" / tx.id / "config.toml"
             staged.parent.mkdir(parents=True, exist_ok=True)
             staged.write_text(registry_to_toml(empty))
@@ -182,7 +191,7 @@ def list_pending_recoveries(
 
 def run_recovery(
     journal_path: Path,
-    state_dir: Path | None = None,  # noqa: ARG001  # pyright: ignore[reportUnusedParameter]
+    state_dir: Path | None = None,
 ) -> RecoveryResult:
     """Recover from a pending journal by restoring preimage files.
 
@@ -197,38 +206,14 @@ def run_recovery(
         ``TransactionError`` if recovery fails.
 
     """
-    journal = read_journal(journal_path)
-    if journal is None:
-        raise TransactionError(
-            f"Cannot read journal {journal_path}",
-        )
-
-    # Restore preimage files that existed before the transaction
-    for resource in journal.resources:
-        res_path = Path(resource.path)
-        if resource.existed and resource.preimage_hash is not None:
-            # The preimage is stored as a backup alongside the journal
-            backup = journal_path.parent / f"{resource.path}.bak"
-            if backup.exists():
-                try:
-                    shutil.copy2(backup, res_path)
-                except OSError as exc:
-                    raise TransactionError(
-                        f"Cannot restore {res_path}: {exc}",
-                    ) from exc
-
-    # Mark journal as rolled back by writing CLEANUP_COMPLETE
-    with contextlib.suppress(OSError):
-        journal_path.write_text(
-            journal_path.read_text().replace(
-                f'"phase": "{journal.phase.value}"',
-                '"phase": "cleanup-complete"',
-            ),
-        )
+    try:
+        Transaction.recover(state_dir or journal_path.parent.parent, journal_path)
+    except OSError as exc:
+        raise TransactionError(f"Cannot restore transaction: {exc}") from exc
 
     return RecoveryResult(
         recovered=True,
-        journal_id=journal.id,
+        journal_id=journal_path.stem,
     )
 
 

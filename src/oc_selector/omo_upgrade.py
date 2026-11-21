@@ -163,19 +163,14 @@ def run_omo_upgrade(
         )
 
     # Validate new config against schema
-    try:
-        # Write to temp for validation
-        tmp_config = state_root / "staging" / "new_omo_config.json"
-        tmp_config.parent.mkdir(parents=True, exist_ok=True)
-        tmp_config.write_text(json.dumps(new_config))
-        validate_omo_config(tmp_config, schema)
-    except SchemaValidationError as exc:
+    problem = _validate_config_dict(new_config, schema)
+    if problem is not None:
         return UpgradeResult(
             success=False,
             from_version=current_version,
             to_version=schema.version,
             message="New config validation failed",
-            error=str(exc),
+            error=problem,
         )
 
     # Use transaction for mutation

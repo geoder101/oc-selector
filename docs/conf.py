@@ -17,6 +17,7 @@ nitpick_ignore = [
     ("py:class", "typer.Typer"),
     ("py:class", "collections.abc.Mapping"),
     ("py:class", "collections.abc.Sequence"),
+    ("py:class", "collections.abc.Generator"),
     ("py:class", "json5.model.JSONText"),
     ("py:class", "json5.model.Node"),
     ("py:class", "pydantic.ConfigDict"),
@@ -29,6 +30,7 @@ autoapi_keep_files = True
 autoapi_add_toctree_entry = False
 autoapi_options = [
     "members",
+    "imported-members",
     "undoc-members",
     "show-inheritance",
     "show-module-summary",

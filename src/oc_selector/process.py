@@ -17,6 +17,7 @@ Launch contract:
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import stat
@@ -25,13 +26,25 @@ import sys
 from pathlib import Path
 from typing import NoReturn
 
+from pydantic import TypeAdapter, ValidationError
+
 from oc_selector.errors import (
     ExecutableMissingError,
     ExecutableNotExecutableError,
     MaintenanceError,
+    RegistryError,
 )
-from oc_selector.paths import resolve_config_parent, resolve_profile_directory
-from oc_selector.registry import Registry  # noqa: TC001
+from oc_selector.maintenance import launch_admission
+from oc_selector.paths import (
+    registry_path,
+    resolve_config_parent,
+    resolve_profile_directory,
+    state_root,
+)
+from oc_selector.registry import (
+    Registry,
+    load_registry,
+)
 from oc_selector.routing import NativeRoute  # noqa: TC001
 
 
@@ -87,13 +100,23 @@ def build_launch_env(
     - Retain OPENCODE_CONFIG, OPENCODE_CONFIG_CONTENT, OPENCODE_TUI_CONFIG.
     - Retain cwd, stdio, HOME/USERPROFILE, data/cache/state and auth.
     """
-    env = dict(base_env) if base_env else dict(os.environ)
+    env = dict(base_env) if base_env is not None else dict(os.environ)
     parent = resolve_config_parent()
     profile = registry.profiles[profile_name]
     # Always set the selected config directory
     env["OPENCODE_CONFIG_DIR"] = str(
         resolve_profile_directory(parent, profile.directory)
     )
+    if profile.model is not None:
+        try:
+            overrides = TypeAdapter(dict[str, object]).validate_json(
+                env.get("OPENCODE_CONFIG_CONTENT", "{}"),
+            )
+        except (ValueError, ValidationError) as exc:
+            raise RegistryError("Invalid OPENCODE_CONFIG_CONTENT") from exc
+        env["OPENCODE_CONFIG_CONTENT"] = json.dumps(
+            {"model": profile.model, **overrides}
+        )
     # OMO profile handling
     if profile.omo_profile is not None:
         # Owned: set registered OMO_PROFILE, clear OCX_PROFILE
@@ -110,12 +133,21 @@ def launch_native(
     dry_run: bool = False,
 ) -> int:
     """Execute the native opencode process."""
-    profile_name = route.profile_name or registry.default_profile
-    exe = resolve_executable(registry.opencode_executable)
-    _reject_self(exe)
-
-    env = build_launch_env(registry, profile_name)
-    argv = [str(exe), *route.argv]
+    with launch_admission(state_root()):
+        path = registry_path()
+        if path.exists():
+            registry = load_registry(path)
+        profile_name = (
+            registry.default_profile
+            if route.use_default
+            else route.profile_name or registry.default_profile
+        )
+        if profile_name not in registry.profiles:
+            raise RegistryError(f"Profile {profile_name!r} no longer exists")
+        exe = resolve_executable(registry.opencode_executable)
+        _reject_self(exe)
+        env = build_launch_env(registry, profile_name)
+        argv = [str(exe), *route.argv]
 
     if dry_run:
         return 0

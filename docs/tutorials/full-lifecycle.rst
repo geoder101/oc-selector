@@ -20,15 +20,16 @@ We create a second profile, ``personal``, that points to ``personal-dir``:
 Sync the host package
 ---------------------
 
-A profile's directory holds a host package (a ``package.json`` or
-``pyproject.toml``). ``sync`` brings that package up to date. We preview first
+A profile's directory declares a host package (one dependency in ``package.json``
+or a project name in ``pyproject.toml``; see :doc:`/how-to/sync-packages`).
+``sync`` brings that package up to date. We preview first
 with ``--dry-run``, which reports what would happen without running the package
 manager:
 
 .. code-block:: console
 
     $ oc-selector sync work --dry-run
-    work: Dry run: would sync my-workspace to latest
+    work: Dry run: would sync my-host-package to latest
 
 We are happy with the preview, so we run the real sync:
 

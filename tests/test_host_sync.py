@@ -1,334 +1,251 @@
-"""TDD tests for host-package sync and node/npm adapter.
-
-Covers:
-- Detect npm package from package.json
-- Detect pip package from pyproject.toml
-- Sync is idempotent
-- No network in detection
-- Verify version match
-- Subprocess sync path with fake npm/pip on PATH (success, failure, timeout,
-  missing package manager, dry-run, re-detect fallback)
-- Write-failure probe against a read-only destination
-"""
+"""Exercise isolated installation, verification and transactional publication."""
 
 from __future__ import annotations
 
 import json
 import subprocess
 import sys
-from pathlib import Path  # noqa: TC003
-from typing import TYPE_CHECKING
+from pathlib import Path
 
-from pydantic import TypeAdapter
+import pytest
 
 from oc_selector.host_sync import (
-    HostPackageInfo,
-    SyncResult,
     detect_host_package,
     sync_host_package,
     verify_host_package,
 )
+from oc_selector.transactions import Transaction, find_pending_journals
 
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
-    import pytest
-    from helpers.process_harness import ProcessHarness
-
-_JOURNAL_ADAPTER: TypeAdapter[dict[str, object]] = TypeAdapter(dict[str, object])
+pytestmark = pytest.mark.usefixtures("isolated_home")
 
 
-class TestDetectHostPackage:
-    def test_happy_detect_npm(self, tmp_path: Path) -> None:
-        pkg = {"name": "test-pkg", "version": "1.2.3"}
-        (tmp_path / "package.json").write_text(json.dumps(pkg))
-        info = detect_host_package(tmp_path)
-        assert isinstance(info, HostPackageInfo)
-        assert info.name == "test-pkg"
-        assert info.version == "1.2.3"
-        assert info.package_manager == "npm"
-
-    def test_happy_detect_pip(self, tmp_path: Path) -> None:
-        pyproject = '[project]\nname = "test-pkg"\nversion = "2.0.0"\n'
-        (tmp_path / "pyproject.toml").write_text(pyproject)
-        info = detect_host_package(tmp_path)
-        assert isinstance(info, HostPackageInfo)
-        assert info.name == "test-pkg"
-        assert info.version == "2.0.0"
-        assert info.package_manager == "pip"
-
-    def test_happy_no_package(self, tmp_path: Path) -> None:
-        info = detect_host_package(tmp_path)
-        assert info is None
-
-    def test_happy_npm_takes_priority(self, tmp_path: Path) -> None:
-        pkg = {"name": "npm-pkg", "version": "1.0.0"}
-        (tmp_path / "package.json").write_text(json.dumps(pkg))
-        pyproject = '[project]\nname = "pip-pkg"\nversion = "2.0.0"\n'
-        (tmp_path / "pyproject.toml").write_text(pyproject)
-        info = detect_host_package(tmp_path)
-        assert info is not None
-        assert info.package_manager == "npm"
-
-    def test_failure_invalid_json(self, tmp_path: Path) -> None:
-        (tmp_path / "package.json").write_text("not valid json")
-        info = detect_host_package(tmp_path)
-        assert info is None
-
-
-class TestVerifyHostPackage:
-    def test_happy_version_match(self, tmp_path: Path) -> None:
-        pkg = {"name": "test-pkg", "version": "1.0.0"}
-        (tmp_path / "package.json").write_text(json.dumps(pkg))
-        assert verify_host_package(tmp_path, "1.0.0") is True
-
-    def test_happy_version_mismatch(self, tmp_path: Path) -> None:
-        pkg = {"name": "test-pkg", "version": "1.0.0"}
-        (tmp_path / "package.json").write_text(json.dumps(pkg))
-        assert verify_host_package(tmp_path, "2.0.0") is False
-
-    def test_happy_no_package(self, tmp_path: Path) -> None:
-        assert verify_host_package(tmp_path, "1.0.0") is False
-
-
-class TestSyncHostPackage:
-    def test_happy_no_package(self, tmp_path: Path) -> None:
-        state_root = tmp_path / "state"
-        state_root.mkdir()
-        result = sync_host_package(tmp_path, state_root)
-        assert isinstance(result, SyncResult)
-        assert result.success is False
-        assert "No host package" in result.message
-
-    def test_happy_already_at_target(self, tmp_path: Path) -> None:
-        pkg = {"name": "test-pkg", "version": "1.0.0"}
-        (tmp_path / "package.json").write_text(json.dumps(pkg))
-        state_root = tmp_path / "state"
-        state_root.mkdir()
-        result = sync_host_package(tmp_path, state_root, target_version="1.0.0")
-        assert result.success is True
-        assert "Already at target" in result.message
-
-    def test_failure_pyproject_unreadable_returns_none(self, tmp_path: Path) -> None:
-        """A pyproject.toml that cannot be read (a directory) is treated as absent."""
-        (tmp_path / "pyproject.toml").mkdir()
-        info = detect_host_package(tmp_path)
-        assert info is None
-
-
-class TestSyncHostPackageSubprocess:
-    """Characterization of the package-manager subprocess path.
-
-    ``sync_host_package`` invokes ``subprocess.run`` without an ``env=``
-    argument, so it inherits the test process environment. The harness puts
-    fake ``npm``/``pip`` executables in ``bin_dir`` and the test prepends that
-    directory to ``PATH`` (test-side PATH injection; no product change).
-    """
-
-    def test_happy_npm_sync_success(
-        self,
-        tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
-        process_harness: ProcessHarness,
-        fixture_executable: Callable[..., Path],
-    ) -> None:
-        """A successful npm install records argv and commits the transaction."""
-        pkg = {"name": "test-pkg", "version": "1.0.0"}
-        (tmp_path / "package.json").write_text(json.dumps(pkg))
-        state_root = tmp_path / "state"
-        state_root.mkdir()
-        fixture_executable("npm", stdout="added 1 package in 1s\n")
-        monkeypatch.setenv("PATH", str(process_harness.bin_dir))
-        result = sync_host_package(tmp_path, state_root, target_version="2.0.0")
-        assert result.success is True
-        assert result.package_name == "test-pkg"
-        # The fake npm does not mutate the manifest, so re-detect reports 1.0.0.
-        assert result.version == "1.0.0"
-        assert result.message == "Synced to 1.0.0"
-        record = process_harness.record_for("npm")
-        argv = record["argv"]
-        assert isinstance(argv, list)
-        assert argv[1:] == ["install", "test-pkg@2.0.0"]
-        journals = sorted((state_root / "journals").glob("*.json"))
-        assert len(journals) == 1
-        journal = _JOURNAL_ADAPTER.validate_python(
-            json.loads(journals[0].read_text(encoding="utf-8")),
+@pytest.fixture
+def npm_profile(tmp_path: Path) -> Path:
+    """Declare a dependency distinct from the workspace's own package name."""
+    (tmp_path / "package.json").write_text(
+        json.dumps(
+            {
+                "name": "workspace",
+                "version": "99.0.0",
+                "dependencies": {"host-package": "1.0.0"},
+            }
         )
-        assert journal["phase"] == "cleanup-complete"
-
-    def test_happy_pip_sync_success_latest(
-        self,
-        tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
-        process_harness: ProcessHarness,
-        fixture_executable: Callable[..., Path],
-    ) -> None:
-        """A successful pip install with no target version uses 'latest'."""
-        pyproject = '[project]\nname = "test-pkg"\nversion = "2.0.0"\n'
-        (tmp_path / "pyproject.toml").write_text(pyproject)
-        state_root = tmp_path / "state"
-        state_root.mkdir()
-        fixture_executable("pip", stdout="Successfully installed test-pkg\n")
-        monkeypatch.setenv("PATH", str(process_harness.bin_dir))
-        result = sync_host_package(tmp_path, state_root)
-        assert result.success is True
-        assert result.package_name == "test-pkg"
-        assert result.version == "2.0.0"
-        record = process_harness.record_for("pip")
-        argv = record["argv"]
-        assert isinstance(argv, list)
-        assert argv[1:] == ["install", "test-pkg==latest"]
-
-    def test_happy_dry_run_reports_without_launch(
-        self,
-        tmp_path: Path,
-        process_harness: ProcessHarness,
-        fixture_executable: Callable[..., Path],
-    ) -> None:
-        """dry_run=True reports the would-be sync without running npm or writing."""
-        pkg = {"name": "test-pkg", "version": "1.0.0"}
-        (tmp_path / "package.json").write_text(json.dumps(pkg))
-        state_root = tmp_path / "state"
-        state_root.mkdir()
-        fixture_executable("npm")
-        result = sync_host_package(tmp_path, state_root, dry_run=True)
-        assert result.success is True
-        assert result.message == "Dry run: would sync test-pkg to latest"
-        # No launch and no transaction material.
-        assert not (process_harness.records_dir / "npm.record.json").exists()
-        assert not (state_root / "journals").exists()
-
-    def test_happy_redetect_fallback_unknown(
-        self,
-        tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
-        process_harness: ProcessHarness,
-    ) -> None:
-        """When the manifest disappears during sync, re-detect falls back to unknown."""
-        pkg = {"name": "test-pkg", "version": "1.0.0"}
-        (tmp_path / "package.json").write_text(json.dumps(pkg))
-        state_root = tmp_path / "state"
-        state_root.mkdir()
-        body = (
-            "import os\n"
-            "path = os.path.join(os.getcwd(), 'package.json')\n"
-            "if os.path.exists(path):\n"
-            "    os.remove(path)\n"
+    )
+    installed = tmp_path / "node_modules" / "host-package"
+    installed.mkdir(parents=True)
+    (installed / "package.json").write_text(
+        json.dumps(
+            {
+                "name": "host-package",
+                "version": "1.0.0",
+            }
         )
-        script = process_harness.bin_dir / "npm"
-        script.write_text(f"#!{sys.executable}\n{body}", encoding="utf-8")
-        script.chmod(0o700)
-        monkeypatch.setenv("PATH", str(process_harness.bin_dir))
-        result = sync_host_package(tmp_path, state_root, target_version="2.0.0")
-        assert result.success is True
-        assert result.version == "unknown"
-        assert result.message == "Synced to unknown"
+    )
+    (installed / "obsolete.js").write_text("old")
+    return tmp_path
 
-    def test_failure_npm_nonzero_exit_rolls_back(
-        self,
-        tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
-        process_harness: ProcessHarness,
-        fixture_executable: Callable[..., Path],
-    ) -> None:
-        """A non-zero npm exit takes the documented sync-failure branch."""
-        pkg = {"name": "test-pkg", "version": "1.0.0"}
-        (tmp_path / "package.json").write_text(json.dumps(pkg))
-        state_root = tmp_path / "state"
-        state_root.mkdir()
-        fixture_executable(
-            "npm",
-            stderr="npm ERR! EACCES: permission denied\n",
-            exit_code=1,
+
+def _npm_output(workspace: Path) -> None:
+    """Write representative npm output in the installer working directory."""
+    package = workspace / "node_modules" / "host-package"
+    package.mkdir(parents=True)
+    (package / "package.json").write_text(
+        json.dumps(
+            {
+                "name": "host-package",
+                "version": "2.0.0",
+            }
         )
-        monkeypatch.setenv("PATH", str(process_harness.bin_dir))
-        result = sync_host_package(tmp_path, state_root, target_version="2.0.0")
-        assert result.success is False
-        assert result.message == "Sync failed"
-        assert result.error is not None
-        assert "Package sync failed" in result.error
-        assert "EACCES" in result.error
-        # Rollback leaves the journal in the prepared phase (recovery evidence).
-        journals = sorted((state_root / "journals").glob("*.json"))
-        assert len(journals) == 1
-        journal = _JOURNAL_ADAPTER.validate_python(
-            json.loads(journals[0].read_text(encoding="utf-8")),
+    )
+    (package / "index.js").write_text("new")
+    (workspace / "package.json").write_text(
+        json.dumps(
+            {
+                "dependencies": {"host-package": "2.0.0"},
+            }
         )
-        assert journal["phase"] == "prepared"
+    )
+    (workspace / "package-lock.json").write_text('{"lockfileVersion": 3}')
 
-    def test_failure_readonly_destination(
-        self,
-        tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
-        process_harness: ProcessHarness,
-    ) -> None:
-        """A read-only sync destination makes the package manager fail (write probe)."""
-        pkg = {"name": "test-pkg", "version": "1.0.0"}
-        (tmp_path / "package.json").write_text(json.dumps(pkg))
-        state_root = tmp_path / "state"
-        state_root.mkdir()
-        # Fake npm that, like the real one, must write into the destination.
-        body = (
-            "import os, sys\n"
-            "probe = os.path.join(os.getcwd(), '.npm-write-probe')\n"
-            "try:\n"
-            "    with open(probe, 'w', encoding='utf-8') as handle:\n"
-            "        handle.write('x')\n"
-            "    os.remove(probe)\n"
-            "except OSError as exc:\n"
-            "    sys.stderr.write(f'npm ERR! cannot write: {exc}\\n')\n"
-            "    sys.exit(1)\n"
-        )
-        script = process_harness.bin_dir / "npm"
-        script.write_text(f"#!{sys.executable}\n{body}", encoding="utf-8")
-        script.chmod(0o700)
-        monkeypatch.setenv("PATH", str(process_harness.bin_dir))
-        try:
-            tmp_path.chmod(0o500)  # read+execute only: the destination is unwritable
-            result = sync_host_package(tmp_path, state_root, target_version="2.0.0")
-        finally:
-            tmp_path.chmod(0o700)
-        assert result.success is False
-        assert result.message == "Sync failed"
-        assert result.error is not None
-        assert result.error.startswith("Package sync failed:")
-        assert "cannot write" in result.error
 
-    def test_failure_package_manager_missing(
-        self,
-        tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
-        process_harness: ProcessHarness,
-    ) -> None:
-        """An npm absent from PATH maps to the documented not-found failure."""
-        pkg = {"name": "test-pkg", "version": "1.0.0"}
-        (tmp_path / "package.json").write_text(json.dumps(pkg))
-        state_root = tmp_path / "state"
-        state_root.mkdir()
-        # bin_dir holds no npm, so PATH resolution fails.
-        monkeypatch.setenv("PATH", str(process_harness.bin_dir))
-        result = sync_host_package(tmp_path, state_root, target_version="2.0.0")
-        assert result.success is False
-        assert result.error == "Package manager not found: npm"
+def test_detect_installed_dependency(npm_profile: Path) -> None:
+    """Root package name/version are not installed dependency metadata."""
+    info = detect_host_package(npm_profile)
+    assert info is not None
+    assert info.name == "host-package"
+    assert info.version == "1.0.0"
+    assert verify_host_package(npm_profile, "1.0.0")
+    assert not verify_host_package(npm_profile, "99.0.0")
 
-    def test_failure_sync_timeout(
-        self,
-        tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """A subprocess timeout maps to the documented timeout failure."""
-        pkg = {"name": "test-pkg", "version": "1.0.0"}
-        (tmp_path / "package.json").write_text(json.dumps(pkg))
-        state_root = tmp_path / "state"
-        state_root.mkdir()
 
-        def _timeout(
-            *_args: object,
-            **_kwargs: object,
-        ) -> subprocess.CompletedProcess[str]:
-            raise subprocess.TimeoutExpired("npm", 300)
+@pytest.mark.parametrize(
+    "manifest",
+    [
+        "not json",
+        '{"name":"workspace","version":"1.0.0"}',
+        '{"dependencies":{}}',
+        '{"dependencies":{"a":"1","b":"2"}}',
+    ],
+)
+def test_reject_ambiguous_manifest(tmp_path: Path, manifest: str) -> None:
+    """Never guess an install target from incomplete workspace metadata."""
+    (tmp_path / "package.json").write_text(manifest)
+    assert detect_host_package(tmp_path) is None
 
-        monkeypatch.setattr("oc_selector.host_sync.subprocess.run", _timeout)
-        result = sync_host_package(tmp_path, state_root, target_version="2.0.0")
-        assert result.success is False
-        assert result.error == "Package sync timed out"
+
+def test_no_package(tmp_path: Path) -> None:
+    """Absent manifests are a classified sync failure."""
+    assert not sync_host_package(tmp_path, tmp_path / "state").success
+
+
+def test_dry_run_and_exact_noop(npm_profile: Path) -> None:
+    """A preview and an already-installed version produce no state writes."""
+    state = npm_profile / "state"
+    assert sync_host_package(npm_profile, state, dry_run=True).success
+    assert sync_host_package(npm_profile, state, "1.0.0").success
+    assert not state.exists()
+
+
+@pytest.fixture
+def npm_install(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
+    """Simulate npm writing files in its actual supplied working directory."""
+    commands: list[list[str]] = []
+
+    def install(
+        cmd: list[str], *, cwd: Path, **_kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        commands.append(cmd)
+        _npm_output(cwd)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr("oc_selector.host_sync.subprocess.run", install)
+    return commands
+
+
+def test_npm_verified_publication(
+    npm_profile: Path, npm_install: list[list[str]]
+) -> None:
+    """Publish verified artifacts, exact pins and deletions through the journal."""
+    state = npm_profile / "state"
+    result = sync_host_package(npm_profile, state, "2.0.0")
+    assert result.success
+    assert result.version == "2.0.0"
+    assert npm_install == [
+        ["npm", "install", "--ignore-scripts", "--save-exact", "host-package@2.0.0"]
+    ]
+    assert verify_host_package(npm_profile, "2.0.0")
+    assert not (npm_profile / "node_modules/host-package/obsolete.js").exists()
+    assert (npm_profile / "node_modules/host-package/index.js").read_text() == "new"
+    assert find_pending_journals(state) == []
+
+
+def test_installer_partial_failure_preserves_profile(
+    npm_profile: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A manager that mutates files and then fails only dirties its workspace."""
+    before = (npm_profile / "package.json").read_bytes()
+
+    def install(
+        cmd: list[str], *, cwd: Path, **_kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        _npm_output(cwd)
+        return subprocess.CompletedProcess(cmd, 1, "", "failed after writes")
+
+    monkeypatch.setattr("oc_selector.host_sync.subprocess.run", install)
+    result = sync_host_package(npm_profile, npm_profile / "state", "2.0.0")
+    assert not result.success
+    assert (npm_profile / "package.json").read_bytes() == before
+    assert verify_host_package(npm_profile, "1.0.0")
+
+
+def test_publication_failure_restores_all_resources(
+    npm_profile: Path,
+    npm_install: list[list[str]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An apply failure after deletion restores the previous installed tree."""
+    assert not npm_install
+    original = Transaction.commit
+
+    def fail(tx: Transaction) -> None:
+        # Remove one real destination, then fail while publishing another.
+        original_write = Path.replace
+
+        def replace(path: Path, target: Path) -> Path:
+            if target == npm_profile / "package.json":
+                raise OSError("injected publish failure")
+            return original_write(path, target)
+
+        with monkeypatch.context() as patch:
+            patch.setattr(Path, "replace", replace)
+            original(tx)
+
+    monkeypatch.setattr(Transaction, "commit", fail)
+    result = sync_host_package(npm_profile, npm_profile / "state", "2.0.0")
+    assert not result.success
+    assert verify_host_package(npm_profile, "1.0.0")
+    assert (npm_profile / "node_modules/host-package/obsolete.js").read_text() == "old"
+    assert not (npm_profile / "node_modules/host-package/index.js").exists()
+
+
+@pytest.mark.parametrize(
+    "error", [FileNotFoundError(), subprocess.TimeoutExpired("npm", 300)]
+)
+def test_installer_errors(
+    npm_profile: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    error: Exception,
+) -> None:
+    """Missing managers and timeouts leave the installation untouched."""
+
+    def fail(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise error
+
+    monkeypatch.setattr("oc_selector.host_sync.subprocess.run", fail)
+    result = sync_host_package(npm_profile, npm_profile / "state")
+    assert not result.success
+    assert verify_host_package(npm_profile, "1.0.0")
+
+
+def test_python_latest_is_profile_local(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Use the current interpreter, valid upgrade syntax and an isolated target."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname="host-package"\nversion="99.0.0"\n'
+    )
+    commands: list[list[str]] = []
+
+    def install(
+        cmd: list[str], *, cwd: Path, **_kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        commands.append(cmd)
+        metadata = cwd / "python-packages/host_package-2.0.0.dist-info"
+        metadata.mkdir(parents=True)
+        (metadata / "METADATA").write_text("Name: host-package\nVersion: 2.0.0\n")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr("oc_selector.host_sync.subprocess.run", install)
+    result = sync_host_package(tmp_path, tmp_path / "state")
+    assert result.success
+    assert result.version == "2.0.0"
+    assert commands[0][:5] == [sys.executable, "-m", "pip", "install", "--upgrade"]
+    assert commands[0][-1] == "host-package"
+    assert "--target" in commands[0]
+    assert verify_host_package(tmp_path, "2.0.0")
+
+
+def test_missing_installed_output_is_failure(
+    npm_profile: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A zero exit status alone is insufficient proof of a successful install."""
+
+    def install(cmd: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr("oc_selector.host_sync.subprocess.run", install)
+    result = sync_host_package(npm_profile, npm_profile / "state")
+    assert not result.success
+    assert verify_host_package(npm_profile, "1.0.0")

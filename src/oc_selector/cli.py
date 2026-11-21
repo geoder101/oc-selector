@@ -43,7 +43,7 @@ from oc_selector.paths import (
     resolve_profile_directory,
     state_root,
 )
-from oc_selector.process import launch_native, resolve_executable
+from oc_selector.process import launch_native
 from oc_selector.registry import Registry, load_registry
 from oc_selector.routing import GRAMMAR_DOC, ManagementRoute, route
 from oc_selector.wizard import (
@@ -548,15 +548,18 @@ def main() -> None:
     args = sys.argv[1:]
     try:
         reg_path = registry_path()
-        reg = load_registry(reg_path) if reg_path.exists() else None
+        reg = (
+            load_registry(reg_path)
+            if reg_path.exists() and not (args and args[0] == "init")
+            else None
+        )
         decision = route(args, reg)
         if isinstance(decision, ManagementRoute):
             app(args=[decision.command, *decision.args], prog_name="oc-selector")
         else:
             if reg is None:
                 _error_exit("No registry found. Run 'oc-selector init' first.", code=2)
-            resolve_executable(reg.opencode_executable)
-            launch_native(decision, reg)
+            raise SystemExit(launch_native(decision, reg))
     except OcSelectorError as exc:
         # Honor the error class's own exit code (126/127/2/1); a plain message.
         typer.echo(f"Error: {exc}", err=True)

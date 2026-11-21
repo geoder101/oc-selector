@@ -299,6 +299,7 @@ _{cmd}_completions() {{
             ;;
     esac
 }}
+compdef _{cmd}_completions {cmd}
 """
 
 
@@ -367,22 +368,29 @@ def _powershell_script(
     branch_text = "\n".join(branch_lines)
     return f"""\
 # {cmd} PowerShell completion
-Register-ArgumentCompleter -Native -CommandName "{cmd}" {{
-    param($commandName, $wordToComplete, $cursorPosition)
+Register-ArgumentCompleter -Native -CommandName "{cmd}" -ScriptBlock {{
+    param($wordToComplete, $commandAst, $cursorPosition)
     $exe = "{exe}"
     $mgmt = @({mgmt_array})
     $profiles = @({profile_array})
-    $words = @($wordToComplete -split ' ')
-    $cur = $words[$words.Count - 1]
+    $cur = $wordToComplete
+    $words = @($commandAst.CommandElements |
+        Where-Object {{ $_.Extent.StartOffset -lt $cursorPosition }} |
+        ForEach-Object {{
+            if ($_ -is [System.Management.Automation.Language.StringConstantExpressionAst]) {{
+                $_.Value
+            }} else {{
+                $_.Extent.Text
+            }}
+        }})
+    if ($cur -eq '') {{ $words += '' }}
     $emit = {{
         param($candidates)
         $candidates | Where-Object {{ $_ -like "$cur*" }} | ForEach-Object {{
             [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
         }}
     }}
-    # When only the current word is present (PowerShell native completers pass
-    # the current word), offer management + profiles + native top-level.
-    if ($words.Count -le 1) {{
+    if ($words.Count -le 2) {{
         $native = & $exe --get-yargs-completions $cur | Where-Object {{ $_ -ne '$0' }}
         & $emit (@($mgmt) + @($profiles) + @($native))
         return
@@ -392,9 +400,9 @@ Register-ArgumentCompleter -Native -CommandName "{cmd}" {{
         default {{
             $fwd = @($words[1..($words.Count - 1)])
             if ($fwd.Count -gt 0 -and ($fwd[0] -eq "--" -or $profiles -contains $fwd[0])) {{
-                $fwd = @($fwd[1..($fwd.Count - 1)])
+                $fwd = @($fwd | Select-Object -Skip 1)
             }}
-            $native = & $exe --get-yargs-completions @($fwd) | Where-Object {{ $_ -ne '$0' }}
+            $native = & $exe --get-yargs-completions @fwd | Where-Object {{ $_ -ne '$0' }}
             & $emit (@($native))
         }}
     }}

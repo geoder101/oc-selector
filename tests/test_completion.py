@@ -326,7 +326,7 @@ class TestShellScriptForms:
         script = generate_completion("zsh", _make_registry(), _OPTIONS)
         assert "words=($@)" not in script
         assert '_oc-selector_completions "$@"' not in script
-        assert script.rstrip().endswith("}")
+        assert script.rstrip().endswith("compdef _oc-selector_completions oc-selector")
 
     def test_zsh_native_slice_skips_only_the_command(self) -> None:
         script = generate_completion("zsh", _make_registry(), _OPTIONS)

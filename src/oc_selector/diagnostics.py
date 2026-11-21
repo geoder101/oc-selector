@@ -32,6 +32,7 @@ from oc_selector.paths import (
     resolve_profile_directory,
     state_root,
 )
+from oc_selector.transactions import JournalPhase, read_journal
 
 if TYPE_CHECKING:
     from oc_selector.registry import Registry
@@ -147,6 +148,29 @@ def _agents_link_status(profile_dir: Path, global_path: Path) -> str:
     return "linked-ok" if is_identical_symlink(link, global_path) else "absent"
 
 
+def _recovery_status(root: Path) -> tuple[str, list[dict[str, object]]]:
+    """Classify journal phases without changing recovery evidence."""
+    status = "clean"
+    transactions: list[dict[str, object]] = []
+    for path in (root / "journals").glob("*.json"):
+        journal = read_journal(path)
+        if journal is not None and journal.phase == JournalPhase.CLEANUP_COMPLETE:
+            continue
+        if journal is None:
+            status = "corrupt"
+        elif status != "corrupt":
+            status = "pending"
+        transactions.append(
+            {
+                "id": journal.id if journal else path.name,
+                "operation": journal.operation if journal else "unknown",
+                "phase": journal.phase.value if journal else "corrupt",
+                "profiles": journal.affected_profiles if journal else [],
+            }
+        )
+    return status, transactions
+
+
 def collect_diagnostics(
     registry: Registry | None,
     *,
@@ -219,22 +243,7 @@ def collect_diagnostics(
         }
 
     # Recovery status (read-only journal check)
-    recovery_dir = st_root / "journals"
-    recovery_status = "clean"
-    transactions: list[dict[str, object]] = []
-    if recovery_dir.exists():
-        journals = list(recovery_dir.iterdir())
-        if journals:
-            recovery_status = "pending"
-            transactions.extend(
-                {
-                    "id": j.name,
-                    "operation": "unknown",
-                    "phase": "unknown",
-                    "profiles": [],
-                }
-                for j in journals
-            )
+    recovery_status, transactions = _recovery_status(st_root)
 
     return DiagnosticsResult(
         schema_version=1,

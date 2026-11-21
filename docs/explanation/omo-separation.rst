@@ -38,13 +38,21 @@ What ``sync`` touches
 directory registered for the target profile under the config parent. For each
 target it:
 
-1. Detects the host package in that directory: a ``package.json`` means npm,
-   a ``pyproject.toml`` means pip; neither means "no host package detected"
-   and the sync fails for that profile.
+1. Detects an explicit host declaration: npm profiles declare exactly one
+   ``dependencies`` entry in ``package.json``; Python profiles declare a
+   distribution name in ``[project]`` in ``pyproject.toml``. The npm workspace's
+   own ``name`` and ``version`` are never used as the dependency or installed
+   version. Missing or ambiguous declarations fail for that profile.
 2. If a target version was given and it already matches the current version,
    the sync is a no-op (``Already at target version``).
-3. Otherwise it runs the package manager's install command for that directory,
-   inside a journaled transaction, and reports the resulting version.
+3. Otherwise it installs in a private transaction workspace and verifies the
+   installed package metadata. npm uses exact dependency pins and disables
+   lifecycle scripts. pip runs through the wrapper's Python interpreter with
+   ``--upgrade --target`` pointing at a staged ``python-packages`` directory.
+4. It publishes the verified installation, including removed files, through
+   journaled replacements. npm output goes into the profile's ``node_modules``
+   and manifests; Python output goes into ``python-packages``. A failed install
+   leaves the profile unchanged; a failed publication restores its preimages.
 
 ``sync`` does **not** touch ``~/.omo``, and it does **not** touch the registry
 file. Its write surface is the target profile directory (plus the state root's

@@ -17,10 +17,12 @@ So every file mutation runs inside a journaled transaction:
 - The new content is staged in a private directory first; the destination is
   only touched at commit time.
 - A journal file records, for every resource, whether it existed before, the
-  SHA-256 of its preimage, and (after commit) the SHA-256 of its postimage.
-- The journal is written with a flush and an fsync — and the parent directory
-  is fsynced too — so the journal on disk is never ahead of what the OS has
-  actually persisted.
+   SHA-256 of its preimage, and the SHA-256 of its intended postimage before
+   application begins. Backups are private, flushed files under
+   ``backups/<transaction-id>/``, keyed by the complete destination path.
+- Journal and destination writes flush a temporary sibling before atomically
+  replacing the previous file. Parent directories are fsynced where supported.
+  A failed write therefore preserves the previous complete journal or file.
 - The committed state is flushed to the journal **before** any rollback
   material is deleted. Recovery therefore always has something to work from.
 
@@ -31,7 +33,7 @@ The phase state machine
 -----------------------
 
 A journal moves through exactly four phases, defined by the ``JournalPhase``
-enum in ``transactions.py``:
+enum in ``transactions/journal.py``:
 
 .. code-block:: text
 
@@ -53,8 +55,8 @@ enum in ``transactions.py``:
 - **prepared** — the lock is held and the journal exists, but no destination
   file has been touched yet. Staging happens in this phase.
 - **applying** — the journal has been rewritten to say "applying", and the
-  staged files are being copied over the destinations. A crash here means some
-  destinations may already hold the new content.
+  staged files are being atomically published at the destinations. A crash here
+  means some destinations may already hold the new content.
 - **committed** — every destination holds the new content, the postimage
   hashes are recorded, and the journal has been flushed to say "committed".
   Only the private staging directory remains to be cleaned up.
@@ -89,12 +91,16 @@ What ``init --recover`` does
 root's ``journals/`` directory for **pending** journals — every journal whose
 phase is anything other than ``cleanup-complete`` — and recovers each one:
 
-1. The journal is read and validated; a journal that cannot be parsed is
-   skipped (it is not treated as pending).
-2. For every resource that **existed before** the transaction and has a
-   recorded preimage, the backup copy stored alongside the journal is restored
-   over the destination.
-3. The journal file is rewritten with phase ``cleanup-complete``, so a second
+1. Recovery acquires the maintenance lock, then reads and validates the journal.
+   Unreadable journals block recovery and launch admission rather than being
+   treated as a clean state.
+2. For prepared or applying transactions, all current resources must match a
+   recorded preimage or postimage, and all required backups must validate.
+   Recovery then restores original files and symlink targets and removes
+   newly created resources. Unexpected edits or missing backups cause refusal
+   while preserving the journal and evidence.
+3. Committed transactions keep their verified postimages and finish cleanup.
+4. The journal file is atomically rewritten with phase ``cleanup-complete``, so a second
    run of ``init --recover`` reports ``No pending recoveries.``
 
 Recovery is deliberately conservative: it restores what the journal proves
@@ -115,16 +121,11 @@ Crash scenarios and their outcomes
 | In **applying** (partial apply)      | Destinations that already hold new content    |
 |                                      | are restored to their preimages; the          |
 |                                      | journal is closed.                            |
-| In **committed** (after apply,       | The applied change is rolled back to its      |
-| before cleanup)                      | preimage and the journal is closed. A         |
-|                                      | transaction that reached committed but did    |
-|                                      | not finish cleanup is treated as incomplete.  |
+| In **committed** (after apply,       | Verify the installed postimages, finish       |
+| before cleanup)                      | staging cleanup, and close the journal.       |
 | Journal already **cleanup-complete** | Not pending; ignored.                         |
-| Journal file corrupt                 | Not readable, not pending; ignored.           |
+| Journal file corrupt                 | Refuse and preserve the recovery evidence.    |
 +--------------------------------------+-----------------------------------------------+
 
-The design choice to make even a *committed-but-not-cleaned-up* journal
-recoverable-by-rollback is deliberate: the alternative (guessing that a
-crashed transaction "probably finished") would silently keep a change whose
-completion was never proven. ``oc-selector`` would rather redo a mutation than
-keep an unproven one.
+The committed journal is the durable commit point. Recovery preserves that
+decision, while an interrupted applying transaction is rolled back.

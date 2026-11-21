@@ -527,7 +527,7 @@ class TestRecoverCommand:
         finally:
             ro_dir.chmod(0o700)
         assert result.exit_code == 1
-        assert "Failed: rec-fail - Cannot restore" in result.output
+        assert "Failed: rec-fail - Missing or invalid backup" in result.output
 
 
 class TestListJson:
@@ -746,7 +746,7 @@ class TestSyncCommand:
         prof_dir = resolve_config_parent() / "default"
         prof_dir.mkdir(parents=True, exist_ok=True)
         (prof_dir / "package.json").write_text(
-            '{"name": "test-pkg", "version": "1.0.0"}',
+            '{"dependencies": {"test-pkg": "1.0.0"}}',
         )
         result = runner.invoke(app, ["sync", "default", "--dry-run"])
         assert result.exit_code == 0
@@ -761,7 +761,7 @@ class TestSyncCommand:
         prof_dir = resolve_config_parent() / "default"
         prof_dir.mkdir(parents=True, exist_ok=True)
         (prof_dir / "package.json").write_text(
-            '{"name": "test-pkg", "version": "1.0.0"}',
+            '{"dependencies": {"test-pkg": "1.0.0"}}',
         )
         result = runner.invoke(app, ["sync", "--all", "--dry-run"])
         assert result.exit_code == 0
@@ -1104,7 +1104,9 @@ class TestMainDispatch:
 
         monkeypatch.setattr("oc_selector.cli.launch_native", fake_launch)
         monkeypatch.setattr(sys, "argv", ["oc-selector", "--model", "openai/gpt"])
-        main()
+        with pytest.raises(SystemExit) as exc:
+            main()
+        assert exc.value.code == 0
         assert len(routes) == 1
         assert routes[0].argv == ("--model", "openai/gpt")
 

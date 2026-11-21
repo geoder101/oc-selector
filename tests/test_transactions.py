@@ -26,7 +26,7 @@ from oc_selector.transactions import (
     JournalPhase,
     ResourceEntry,
     Transaction,
-    _fsync_dir,  # pyright: ignore[reportPrivateUsage]
+    _fsync_dir,
     find_pending_journals,
     journal_to_dict,
     read_journal,
@@ -118,12 +118,12 @@ class TestTransactionLifecycle:
         assert len(tx.resources) == 1
         tx.rollback()
 
-    def test_happy_commit_skips_missing_staged_file(
+    def test_failure_commit_refuses_missing_staged_file(
         self,
         state_root: Path,
         tmp_path: Path,
     ) -> None:
-        """Commit tolerates a lost staged file: the destination is not created."""
+        """Lost staging must not be reported as a successful commit."""
         tx = Transaction(state_root, operation="test")
         tx.begin()
         src = tmp_path / "source.txt"
@@ -131,9 +131,11 @@ class TestTransactionLifecycle:
         dst = tmp_path / "dest.txt"
         tx.stage_file(src, dst)
         # Simulate staging loss (partial crash) before commit.
-        (state_root / "staging" / tx.id / dst.name).unlink()
-        tx.commit()
-        assert tx.phase == JournalPhase.CLEANUP_COMPLETE
+        for staged in (state_root / "staging" / tx.id).iterdir():
+            staged.unlink()
+        with pytest.raises(FileNotFoundError):
+            tx.commit()
+        tx.rollback()
         assert not dst.exists()
 
     def test_happy_rollback_restores_backup(
@@ -149,9 +151,6 @@ class TestTransactionLifecycle:
         src = tmp_path / "new.txt"
         src.write_text("replacement")
         tx.stage_file(src, dst)
-        backup_dir = state_root / "backups" / tx.id
-        backup_dir.mkdir(parents=True)
-        (backup_dir / dst.name).write_text("original")
         # Simulate a partial apply: the destination now holds the new content.
         dst.write_text("replacement")
         tx.rollback()
@@ -362,15 +361,21 @@ class TestLockContention:
         tx2 = Transaction(state_root, operation="second")
         with pytest.raises(MaintenanceError, match="lock"):
             tx2.begin()
+        tx2.rollback()
+        tx2.close()
         tx1.close()
 
 
 class TestFsyncDir:
     """Directory fsync helper tolerates unsupported platforms."""
 
-    def test_happy_missing_path_swallowed(self, tmp_path: Path) -> None:
-        """An OSError from opening the directory is swallowed silently."""
-        assert _fsync_dir(tmp_path / "missing") is None
+    def test_failure_missing_path_reported(self, tmp_path: Path) -> None:
+        """Real directory flush failures are reported on supporting platforms."""
+        if sys.platform == "win32":
+            assert _fsync_dir(tmp_path / "missing") is None
+        else:
+            with pytest.raises(FileNotFoundError):
+                _fsync_dir(tmp_path / "missing")
 
 
 class TestSymlinkTransactions:

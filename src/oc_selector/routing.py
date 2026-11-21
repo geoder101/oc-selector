@@ -34,6 +34,7 @@ class NativeRoute:
 
     argv: tuple[str, ...]
     profile_name: str | None = None  # None = default profile
+    use_default: bool = field(default=False, compare=False, repr=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,7 +62,7 @@ def route(argv: list[str], registry: Registry | None) -> NativeRoute | Managemen
     if not argv:
         # No args: use default profile
         default = registry.default_profile if registry else "default"
-        return NativeRoute(argv=(), profile_name=default)
+        return NativeRoute(argv=(), profile_name=default, use_default=True)
 
     first = argv[0]
 
@@ -69,7 +70,7 @@ def route(argv: list[str], registry: Registry | None) -> NativeRoute | Managemen
     if first == "--":
         tail = tuple(argv[1:])
         default = registry.default_profile if registry else "default"
-        return NativeRoute(argv=tail, profile_name=default)
+        return NativeRoute(argv=tail, profile_name=default, use_default=True)
 
     # Root --help and --version are native
     if first in ("--help", "--version"):
@@ -86,7 +87,7 @@ def route(argv: list[str], registry: Registry | None) -> NativeRoute | Managemen
 
     # Unknown first token: forward unchanged to native default
     default = registry.default_profile if registry else "default"
-    return NativeRoute(argv=tuple(argv), profile_name=default)
+    return NativeRoute(argv=tuple(argv), profile_name=default, use_default=True)
 
 
 # --- Management grammar validation (exact grammar) ---

@@ -41,7 +41,7 @@ succeeds.
     # Required. The settings directory for this profile, relative to the config
     # parent ($XDG_CONFIG_HOME).
     directory = "work-dir"
-    # Optional. Pin a model ID for this profile.
+    # Optional. Set the default model ID for this profile.
     model = "openai/gpt-4"
 
     [profiles.personal]
@@ -74,7 +74,10 @@ Per-profile keys (under ``[profiles.<name>]``):
     String. **Required**, non-empty. Relative to the config parent.
 
 ``model``
-    String. Optional. A pinned model ID.
+    String. Optional. Default model ID passed through
+    ``OPENCODE_CONFIG_CONTENT`` at launch. Other inherited inline settings are
+    preserved. An inherited inline ``model`` or explicit native ``--model``
+    takes precedence over this default; native arguments are unchanged.
 
 ``omo_profile``
     String. Optional. The OMO profile associated with this profile.

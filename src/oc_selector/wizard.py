@@ -17,6 +17,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path  # noqa: TC003
 
+from pydantic import ValidationError
+
 from oc_selector.agents_link import LinkResult, ensure_link, link_path
 from oc_selector.errors import (
     ArgumentError,
@@ -119,6 +121,43 @@ def _link_status_fragment(result: LinkResult, global_path: Path) -> str:
     return str(global_path)
 
 
+def _updated_registry(reg: Registry, name: str, entry: ProfileEntry) -> Registry:
+    """Validate the prospective registry, including directory uniqueness."""
+    try:
+        return Registry(
+            schema_version=reg.schema_version,
+            default_profile=reg.default_profile,
+            opencode_executable=reg.opencode_executable,
+            profiles={**reg.profiles, name: entry},
+        )
+    except ValidationError as exc:
+        raise RegistryError(str(exc)) from exc
+
+
+def _edited_entry(existing: ProfileEntry, inp: EditProfileInput) -> ProfileEntry:
+    """Preserve unspecified fields from the locked snapshot."""
+    return ProfileEntry(
+        directory=inp.directory if inp.directory is not None else existing.directory,
+        model=inp.model if inp.model is not None else existing.model,
+        omo_profile=inp.omo_profile
+        if inp.omo_profile is not None
+        else existing.omo_profile,
+    )
+
+
+def _current_registry(path: Path, name: str, operation: str) -> Registry:
+    """Read and check mutation preconditions while the caller holds the lock."""
+    reg = load_registry(path)
+    if operation == "create":
+        if name in reg.profiles:
+            raise RegistryError(f"Profile {name!r} already exists")
+    elif name not in reg.profiles:
+        raise RegistryError(f"Profile {name!r} not found")
+    elif operation == "delete" and name == reg.default_profile:
+        raise RegistryError(f"Cannot delete default profile {name!r}")
+    return reg
+
+
 def _relink_after_directory_change(
     existing: ProfileEntry,
     inp: EditProfileInput,
@@ -187,7 +226,14 @@ def run_create_wizard(
     # Load existing registry
     try:
         reg = load_registry(registry_path)
-    except RegistryError as exc:
+        _updated_registry(
+            reg,
+            inp.name,
+            ProfileEntry(
+                directory=inp.directory, model=inp.model, omo_profile=inp.omo_profile
+            ),
+        )
+    except (RegistryError, ValidationError) as exc:
         return WizardResult(
             success=False,
             profile_name=inp.name,
@@ -223,12 +269,8 @@ def run_create_wizard(
     link_fragment: str | None = None
     try:
         tx.begin()
-        new_reg = Registry(
-            schema_version=reg.schema_version,
-            default_profile=reg.default_profile,
-            opencode_executable=reg.opencode_executable,
-            profiles={**reg.profiles, inp.name: entry},
-        )
+        reg = _current_registry(registry_path, inp.name, "create")
+        new_reg = _updated_registry(reg, inp.name, entry)
         new_toml = registry_to_toml(new_reg)
         # Write to temp file, then stage it
         tmp_file = state_root / "staging" / tx.id / "new_config.toml"
@@ -310,7 +352,13 @@ def run_edit_wizard(
 
     try:
         validate_edit_input(inp)
-    except (ArgumentError, SchemaValidationError, RegistryError) as exc:
+        _updated_registry(reg, inp.name, _edited_entry(existing, inp))
+    except (
+        ArgumentError,
+        SchemaValidationError,
+        RegistryError,
+        ValidationError,
+    ) as exc:
         # A missing/empty directory is a usage error (exit 2); any other
         # failure (bad model, etc.) is an operation rejection (exit 1).
         return WizardResult(
@@ -334,25 +382,14 @@ def run_edit_wizard(
         )
 
     # Build updated entry
-    new_entry = ProfileEntry(
-        directory=inp.directory if inp.directory is not None else existing.directory,
-        model=inp.model if inp.model is not None else existing.model,
-        omo_profile=inp.omo_profile
-        if inp.omo_profile is not None
-        else existing.omo_profile,
-    )
-
     # Use transaction for mutation
     tx = Transaction(state_root, operation="edit")
     link_fragment: str | None = None
     try:
         tx.begin()
-        new_reg = Registry(
-            schema_version=reg.schema_version,
-            default_profile=reg.default_profile,
-            opencode_executable=reg.opencode_executable,
-            profiles={**reg.profiles, inp.name: new_entry},
-        )
+        reg = _current_registry(registry_path, inp.name, "edit")
+        existing = reg.profiles[inp.name]
+        new_reg = _updated_registry(reg, inp.name, _edited_entry(existing, inp))
         new_toml = registry_to_toml(new_reg)
         tmp_file = state_root / "staging" / tx.id / "new_config.toml"
         tmp_file.parent.mkdir(parents=True, exist_ok=True)
@@ -458,6 +495,7 @@ def run_delete(  # noqa: PLR0911
     tx = Transaction(state_root, operation="delete")
     try:
         tx.begin()
+        reg = _current_registry(registry_path, inp.name, "delete")
         remaining = {
             name: entry for name, entry in reg.profiles.items() if name != inp.name
         }
@@ -542,6 +580,7 @@ def run_set_default(
     tx = Transaction(state_root, operation="set-default")
     try:
         tx.begin()
+        reg = _current_registry(registry_path, profile_name, "set-default")
         new_reg = Registry(
             schema_version=reg.schema_version,
             default_profile=profile_name,

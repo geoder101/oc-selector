@@ -38,7 +38,6 @@ zmodload zsh/complist 2>/dev/null
 zstyle ':completion:*' menu select
 bindkey '^I' complete-word
 source /work/zsh_completion.zsh
-compdef _oc-selector_completions oc-selector
 SETUP
 
 tmux kill-server 2>/dev/null || true

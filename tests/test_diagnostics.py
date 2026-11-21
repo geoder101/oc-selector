@@ -417,12 +417,12 @@ class TestLockAndRecoveryAssembly:
         journals.mkdir(parents=True)
         (journals / "abc.json").write_text("{}", encoding="utf-8")
         result = collect_diagnostics(_registry(), version_probe=_fake_probe_ok())
-        assert result.recovery["status"] == "pending"
+        assert result.recovery["status"] == "corrupt"
         assert result.recovery["transactions"] == [
             {
                 "id": "abc.json",
                 "operation": "unknown",
-                "phase": "unknown",
+                "phase": "corrupt",
                 "profiles": [],
             },
         ]

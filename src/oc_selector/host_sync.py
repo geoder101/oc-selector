@@ -1,53 +1,42 @@
-"""Exact host-package sync and node/npm adapter.
+"""Install an explicitly declared host dependency in a private workspace.
 
-Host-package sync is exact, no drift.
-Node/npm adapter detects and manages the host package.
-No author constants in installed src.
-No silent fallbacks.
-No direct network I/O in sync: a package manager reaches the network.
-No secret material in logs.
-No migration of legacy fields.
-All mutations go through transaction.
-Idempotent operations.
-No conversion calls.
+An npm profile declares exactly one host in ``dependencies``; the workspace's
+own name is never an install target. Python profiles declare their distribution
+in ``[project]`` and install into the profile-local ``python-packages`` tree.
+Only verified package-manager output is published through a transaction.
+There is no direct network I/O here; package managers perform downloads.
 """
 
 from __future__ import annotations
 
-import json
 import subprocess
+import sys
+import tomllib
 from dataclasses import dataclass
-from pathlib import Path  # noqa: TC003
-from typing import ClassVar
+from email.parser import BytesParser
+from typing import TYPE_CHECKING, ClassVar
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+if TYPE_CHECKING:
+    from pathlib import Path
+
+from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 
 from oc_selector.errors import MaintenanceError
+from oc_selector.package_stage import stage_tree
+from oc_selector.transaction_io import atomic_write
 from oc_selector.transactions import Transaction
 
 
 class PackageJson(BaseModel):
-    """Strict manifest model for the host ``package.json``.
+    """Parse the dependency declaration without treating root metadata as a host."""
 
-    Real manifests always carry keys beyond ``name``/``version``, so extra
-    keys are ignored; a non-object top level or a wrong-typed ``name``/
-    ``version`` fails validation and is treated as corruption (None).
-    """
-
-    model_config: ClassVar[ConfigDict] = ConfigDict(
-        extra="ignore",
-        frozen=True,
-        strict=True,
-        validate_default=True,
-    )
-
-    name: str = "unknown"
-    version: str = "0.0.0"
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="ignore", strict=True)
+    dependencies: dict[str, str]
 
 
 @dataclass(frozen=True, slots=True)
 class HostPackageInfo:
-    """Information about the host package."""
+    """An explicitly declared distribution and its installed version."""
 
     name: str
     version: str
@@ -66,54 +55,118 @@ class SyncResult:
     error: str | None = None
 
 
-def detect_host_package(
-    project_root: Path,
-) -> HostPackageInfo | None:
-    """Detect the host package in the project root.
+def _installed_version(root: Path, name: str, manager: str) -> str:
+    """Read installed package metadata, never the workspace's own version."""
+    if manager == "npm":
+        path = root / "node_modules" / name / "package.json"
+        if not path.exists():
+            return "unknown"
+        data = TypeAdapter(dict[str, object]).validate_json(path.read_bytes())
+        if data.get("name") == name:
+            version = data.get("version")
+            if isinstance(version, str):
+                return version
+    else:
+        normalized = name.lower().replace("_", "-")
+        for path in (root / "python-packages").glob("*.dist-info/METADATA"):
+            metadata = BytesParser().parsebytes(path.read_bytes())
+            if str(metadata.get("Name", "")).lower().replace("_", "-") == normalized:
+                return str(metadata.get("Version", "unknown"))
+    return "unknown"
 
-    Args:
-        project_root: Path to the project root.
 
-    Returns:
-        A ``HostPackageInfo`` if detected, None otherwise.
-
-    """
-    # Check for package.json (npm)
-    pkg_json = project_root / "package.json"
-    if pkg_json.exists():
-        try:
-            manifest = PackageJson.model_validate(json.loads(pkg_json.read_text()))
-            return HostPackageInfo(
-                name=manifest.name,
-                version=manifest.version,
-                path=pkg_json,
-                package_manager="npm",
+def detect_host_package(project_root: Path) -> HostPackageInfo | None:
+    """Detect an unambiguous host declaration and read its installed version."""
+    try:
+        path = project_root / "package.json"
+        if path.exists():
+            manifest = PackageJson.model_validate_json(path.read_bytes())
+            if len(manifest.dependencies) != 1:
+                return None
+            name = next(iter(manifest.dependencies))
+            manager = "npm"
+        else:
+            path = project_root / "pyproject.toml"
+            data = tomllib.loads(path.read_text())
+            project = TypeAdapter(dict[str, object]).validate_python(
+                data.get("project")
             )
-        except json.JSONDecodeError, OSError, ValidationError:
-            return None
+            name_value = project.get("name")
+            if not isinstance(name_value, str) or not name_value:
+                return None
+            name = name_value
+            manager = "pip"
+        return HostPackageInfo(
+            name,
+            _installed_version(project_root, name, manager),
+            path,
+            manager,
+        )
+    except OSError, ValueError, ValidationError:
+        return None
 
-    # Check for pyproject.toml (pip/uv)
-    pyproject = project_root / "pyproject.toml"
-    if pyproject.exists():
-        try:
-            content = pyproject.read_text()
-            name = "unknown"
-            version = "0.0.0"
-            for line in content.splitlines():
-                if line.strip().startswith("name"):
-                    name = line.split("=", 1)[1].strip().strip('"').strip("'")
-                elif line.strip().startswith("version"):
-                    version = line.split("=", 1)[1].strip().strip('"').strip("'")
-            return HostPackageInfo(
-                name=name,
-                version=version,
-                path=pyproject,
-                package_manager="pip",
-            )
-        except OSError:
-            return None
 
-    return None
+def _install(cmd: list[str], workspace: Path) -> None:
+    """Run the isolated installer with classified errors and a bounded timeout."""
+    try:
+        result = subprocess.run(  # noqa: S603
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=300,
+            cwd=workspace,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        raise MaintenanceError("Package sync timed out") from None
+    except FileNotFoundError:
+        raise MaintenanceError(f"Package manager not found: {cmd[0]}") from None
+    if result.returncode != 0:
+        raise MaintenanceError(f"Package sync failed: {result.stderr[:200]}")
+
+
+def _prepare_install(
+    info: HostPackageInfo,
+    workspace: Path,
+    target: str | None,
+) -> list[str]:
+    """Select explicit profile-local installation destinations."""
+    if info.package_manager == "npm":
+        atomic_write(workspace / "package.json", info.path.read_bytes())
+        return [
+            "npm",
+            "install",
+            "--ignore-scripts",
+            "--save-exact",
+            f"{info.name}@{target or 'latest'}",
+        ]
+    requirement = f"{info.name}=={target}" if target else info.name
+    return [
+        sys.executable,
+        "-m",
+        "pip",
+        "install",
+        "--upgrade",
+        "--target",
+        str(workspace / "python-packages"),
+        requirement,
+    ]
+
+
+def _verify_install(workspace: Path, info: HostPackageInfo, target: str | None) -> str:
+    """Refuse missing metadata or an installer that did not produce the target."""
+    version = _installed_version(workspace, info.name, info.package_manager)
+    if version == "unknown" or (target is not None and version != target):
+        raise MaintenanceError(f"Installed version verification failed: {version}")
+    return version
+
+
+def _locked_host(project_root: Path) -> HostPackageInfo:
+    """Re-read the declaration under the transaction's maintenance lock."""
+    info = detect_host_package(project_root)
+    if info is None:
+        raise MaintenanceError("Host package declaration changed before sync")
+    return info
 
 
 def sync_host_package(
@@ -123,29 +176,21 @@ def sync_host_package(
     *,
     dry_run: bool = False,
 ) -> SyncResult:
-    """Sync the host package to the target version.
-
-    Args:
-        project_root: Path to the project root.
-        state_root: Path to the state root.
-        target_version: Target version (None for latest).
-        dry_run: When set, report the would-be sync without running it.
-
-    Returns:
-        A ``SyncResult`` describing the outcome.
-
-    """
+    """Install, verify, then transactionally publish a profile-local package."""
     info = detect_host_package(project_root)
     if info is None:
         return SyncResult(
             success=False,
             package_name="unknown",
-            version="0.0.0",
+            version="unknown",
             message="No host package detected",
-            error="No package.json or pyproject.toml found",
+            error=(
+                "Declare one npm dependency or a Python [project] name"
+                if (project_root / "package.json").exists()
+                or (project_root / "pyproject.toml").exists()
+                else "No package.json or pyproject.toml found"
+            ),
         )
-
-    # If target version matches current, no-op
     if target_version is not None and target_version == info.version:
         return SyncResult(
             success=True,
@@ -153,7 +198,6 @@ def sync_host_package(
             version=info.version,
             message="Already at target version",
         )
-
     if dry_run:
         return SyncResult(
             success=True,
@@ -161,39 +205,24 @@ def sync_host_package(
             version=info.version,
             message=f"Dry run: would sync {info.name} to {target_version or 'latest'}",
         )
-
-    # Use transaction for mutation
     tx = Transaction(state_root, operation="sync")
     try:
         tx.begin()
-
-        # Run the appropriate package manager command
+        info = _locked_host(project_root)
+        workspace = state_root / "staging" / tx.id / "workspace"
+        workspace.mkdir(parents=True)
+        cmd = _prepare_install(info, workspace, target_version)
+        _install(cmd, workspace)
+        version = _verify_install(workspace, info, target_version)
+        tree = "node_modules" if info.package_manager == "npm" else "python-packages"
+        stage_tree(tx, workspace / tree, project_root / tree)
         if info.package_manager == "npm":
-            cmd = ["npm", "install", f"{info.name}@{target_version or 'latest'}"]
-        else:
-            cmd = ["pip", "install", f"{info.name}=={target_version or 'latest'}"]
-
-        try:
-            result = subprocess.run(  # noqa: S603, PLW1510
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=300,
-                cwd=project_root,
-            )
-            if result.returncode != 0:
-                raise MaintenanceError(
-                    f"Package sync failed: {result.stderr[:200]}",
-                )
-        except subprocess.TimeoutExpired:
-            raise MaintenanceError("Package sync timed out") from None
-        except FileNotFoundError:
-            raise MaintenanceError(
-                f"Package manager not found: {cmd[0]}",
-            ) from None
-
+            for filename in ("package.json", "package-lock.json"):
+                source = workspace / filename
+                if source.exists():
+                    tx.stage_file(source, project_root / filename)
         tx.commit()
-    except MaintenanceError as exc:
+    except (OSError, MaintenanceError, ValueError) as exc:
         tx.rollback()
         return SyncResult(
             success=False,
@@ -204,34 +233,15 @@ def sync_host_package(
         )
     finally:
         tx.close()
-
-    # Re-detect to get new version
-    new_info = detect_host_package(project_root)
-    new_version = new_info.version if new_info else "unknown"
-
     return SyncResult(
         success=True,
         package_name=info.name,
-        version=new_version,
-        message=f"Synced to {new_version}",
+        version=version,
+        message=f"Synced to {version}",
     )
 
 
-def verify_host_package(
-    project_root: Path,
-    expected_version: str,
-) -> bool:
-    """Verify the host package is at the expected version.
-
-    Args:
-        project_root: Path to the project root.
-        expected_version: Expected version string.
-
-    Returns:
-        True if the version matches, False otherwise.
-
-    """
+def verify_host_package(project_root: Path, expected_version: str) -> bool:
+    """Verify installed metadata against an expected exact version."""
     info = detect_host_package(project_root)
-    if info is None:
-        return False
-    return info.version == expected_version
+    return info is not None and info.version == expected_version
