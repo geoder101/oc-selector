@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
@@ -13,6 +17,9 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - uses: ./.github/actions/setup
       - run: just sync
       - run: just check
@@ -26,19 +33,24 @@ jobs:
     environment: release
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - uses: ./.github/actions/setup
       - run: just sync
       - run: just build
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          VERSION=$(ls dist/*.whl | sed 's/.*oc_selector-\([0-9.]*\)-py3.*/\1/')
+          VERSION=$(uv run python -c 'import tomllib; from pathlib import Path; print(tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"])')
           TAG="v${VERSION}"
           if gh release view "$TAG" 2>/dev/null; then
             echo "Release $TAG already exists, updating assets..."
             gh release upload "$TAG" dist/* --clobber
           else
             gh release create "$TAG" dist/* \
+              --target "$GITHUB_SHA" \
               --title "oc-selector $VERSION"
           fi

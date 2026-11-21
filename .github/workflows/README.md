@@ -28,7 +28,7 @@ than a silent pass.
 
 | Job | Runs on | What it proves |
 |-----|---------|----------------|
-| `check` | `ubuntu-latest` | The single gate `just check` (lock-check, format-check, lint, typecheck, test, docs-check, build) passes. |
+| `check` | `ubuntu-latest`, `macos-latest`, `windows-latest` | The single gate `just check` (lock-check, format-check, lint, typecheck, test, docs-check, build) passes on all three platforms. Matrix failures do not cancel the remaining legs. |
 | `coverage` | `ubuntu-latest` | The fresh full-suite combined coverage gate (`just coverage-check`, fixed 90% threshold) passes. |
 
 **Artifact:** `coverage-${{ github.run_id }}-${{ github.run_attempt }}`, uploaded with
@@ -42,6 +42,7 @@ than a silent pass.
 
 | Job | Runs on | What it proves |
 |-----|---------|----------------|
+| `authorize` | `ubuntu-latest` | Confirms the event is a push to `main` and that `main` is the repository's default branch before building or deploying. |
 | `build` | `ubuntu-latest` | Checks out the event SHA (`persist-credentials: false`), then proves the strict docs build (`just docs-check`, `-W`) passes. Uploads `docs/_build/html` as the `github-pages` artifact via `upload-pages-artifact`. |
 | `deploy` | `ubuntu-latest` | Reads the `github-pages` artifact by name and deploys it via the `deploy-pages` action in the `github-pages` environment (no separate download or configure step). The site URL is the **deployment output** (`steps.deployment.outputs.page_url`), surfaced on the environment — it is not hardcoded anywhere. |
 
@@ -72,12 +73,25 @@ queue rather than cancel each other.
 | Job | Runs on | What it proves |
 |-----|---------|----------------|
 | `test` | `ubuntu-latest` | The single gate `just check` passes on the pushed commit before anything is built or published. |
-| `publish` | `ubuntu-latest` | Runs only on `push` to `refs/heads/main`, in the `release` environment. Builds the wheel with `just build`, then creates (or updates, with `--clobber`) the GitHub Release tagged `v<version>` from the wheel filename using the repository's built-in token. |
+| `publish` | `ubuntu-latest` | Runs only on `push` to `refs/heads/main`, in the `release` environment. Builds the distribution with `just build`, then creates (or updates, with `--clobber`) the GitHub Release tagged `v<version>` from `pyproject.toml` using the repository's built-in token. New tags target the tested event SHA. |
 
 Only the `publish` job receives `contents: write` (required to open the release);
 the `test` job and all other workflows stay read-only. The GitHub Release is gated
 on the default branch and the `release` environment; the `release` environment can
 additionally require a reviewer.
+
+## GitHub repository setup
+
+Before the first push, enable Actions and select **GitHub Actions** as the Pages
+source. Create the `github-pages` environment with a deployment branch rule for
+`main`. Create the `release` environment with the same branch rule and a required
+reviewer to provide human sign-off before publication.
+
+The default branch is `main`. Protect it against deletion and force pushes, require
+linear history and signed commits, and require the three `check` matrix results
+plus `coverage`. Enable rebase merging only; GitHub does not offer a true
+fast-forward-only pull-request merge mode. Initial branch creation and hosted
+verification happen after the repository owner approves the first push.
 
 ## Local smoke test with `act`
 
