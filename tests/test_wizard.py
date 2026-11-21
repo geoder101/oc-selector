@@ -11,7 +11,7 @@ Covers:
 
 from __future__ import annotations
 
-from pathlib import Path  # noqa: TC003
+from pathlib import Path
 
 import pytest
 
@@ -209,7 +209,7 @@ class TestCreateWizardAgentsLink:
         )
         link = link_path(profile_dir)
         assert link.is_symlink() is True
-        assert link.readlink().resolve() == target.resolve()
+        assert link.samefile(target)
         assert profile_dir.is_dir()
         assert result.agents_link is not None
         assert result.agents_link == str(target)
@@ -247,7 +247,10 @@ class TestCreateWizardAgentsLink:
         )
         link = link_path(profile_dir)
         assert link.is_symlink() is True
-        assert link.readlink().resolve() == global_agents_md_path().resolve()
+        assert (
+            Path(str(link.readlink()).removeprefix("\\\\?\\"))
+            == global_agents_md_path().resolve()
+        )
 
     def test_dry_run_creates_no_link(
         self,
@@ -432,7 +435,7 @@ class TestEditWizardAgentsLink:
         new_dir = resolve_profile_directory(resolve_config_parent(), "new-dir")
         new_link = link_path(new_dir)
         assert new_link.is_symlink()
-        assert new_link.readlink().resolve() == target.resolve()
+        assert new_link.samefile(target)
         assert result.agents_link is not None
         assert result.agents_link == str(target)
 

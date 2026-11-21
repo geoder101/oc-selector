@@ -825,7 +825,7 @@ class TestLinkCommand:
         for name in ("work", "personal"):
             link = _profile_link(resolve_config_parent(), f"{name}-dir")
             assert link.is_symlink()
-            assert link.readlink().resolve() == expected
+            assert link.samefile(expected)
 
     def test_link_single_profile(self, link_env: tuple[Path, Path]) -> None:
         _, config_dir = link_env

@@ -396,7 +396,7 @@ class TestSymlinkTransactions:
         tx.stage_symlink(dst, target)
         tx.commit()
         assert dst.is_symlink() is True
-        assert dst.readlink().resolve() == target.resolve()
+        assert dst.samefile(target)
 
     def test_happy_symlink_rollback_removes_link_and_created_dir(
         self,
@@ -434,10 +434,10 @@ class TestSymlinkTransactions:
         new_target.write_text("new")
         tx.stage_symlink(dst, new_target)
         tx.commit()
-        assert dst.readlink().resolve() == new_target.resolve()
+        assert dst.samefile(new_target)
         tx.rollback()
         assert dst.is_symlink() is True
-        assert dst.readlink().resolve() == old_target.resolve()
+        assert dst.samefile(old_target)
 
     def test_happy_symlink_rollback_preserves_preexisting_real_file(
         self,

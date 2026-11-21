@@ -215,7 +215,8 @@ class TestPaths:
         # A directory resolving exactly to the home directory is just "~".
         assert display_profile_directory(parent, "~") == "~"
         # An absolute path outside the home directory is shown in full.
-        assert display_profile_directory(parent, "/data/elsewhere") == "/data/elsewhere"
+        outside = tmp_path / "elsewhere"
+        assert display_profile_directory(parent, str(outside)) == str(outside)
 
 
 class TestSubprocessHarness:

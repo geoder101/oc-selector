@@ -14,6 +14,7 @@ primitive (T3). Transactional creation is the caller's concern (T1).
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -43,14 +44,24 @@ def link_path(profile_config_dir: Path) -> Path:
 def is_identical_symlink(link: Path, target: Path) -> bool:
     """Return ``True`` iff ``link`` is a symlink whose target equals ``target``.
 
-    Resolve the stored target to normalize Windows extended-length path prefixes.
+    Normalize Windows extended-length path prefixes after resolving the target.
     Relative targets are interpreted from the link's parent, including dangling
     targets, rather than from the working directory.
     """
-    return (
-        link.is_symlink()
-        and (link.parent / link.readlink()).resolve() == target.resolve()
-    )
+    return link.is_symlink() and _normalized_target(
+        link.parent / link.readlink()
+    ) == _normalized_target(target)
+
+
+def _normalized_target(path: Path) -> str:
+    """Compare resolved targets consistently, including Windows UNC paths."""
+    resolved = str(path.resolve())
+    if os.name == "nt":
+        if resolved.startswith("\\\\?\\UNC\\"):
+            resolved = "\\\\" + resolved.removeprefix("\\\\?\\UNC\\")
+        else:
+            resolved = resolved.removeprefix("\\\\?\\")
+    return os.path.normcase(resolved)
 
 
 def decide_link(profile_config_dir: Path, target: Path) -> LinkResult:
