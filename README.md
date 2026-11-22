@@ -153,4 +153,4 @@ considering work done. `just cli <args>` runs the tool. See `just --list` (or th
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
