@@ -24,7 +24,7 @@ than a silent pass.
 
 ## `ci.yml` — CI
 
-**Triggers:** `pull_request` and `push` (any branch).
+**Triggers:** `pull_request`, plus `workflow_call` when `main` is pushed to (via the Release workflow).
 
 | Job | Runs on | What it proves |
 |-----|---------|----------------|
@@ -72,7 +72,7 @@ queue rather than cancel each other.
 
 | Job | Runs on | What it proves |
 |-----|---------|----------------|
-| `test` | `ubuntu-latest` | The single gate `just check` passes on the pushed commit before anything is built or published. |
+| `test` | Reusable CI | Runs the full CI matrix (`check` on all three OS plus the 90% coverage gate) via `ci.yml`, gating the build before anything is published. |
 | `publish` | `ubuntu-latest` | Runs only on `push` to `refs/heads/main`, in the `release` environment. Builds the distribution with `just build`, then creates (or updates, with `--clobber`) the GitHub Release tagged `v<version>` from `pyproject.toml` using the repository's built-in token. New tags target the tested event SHA. |
 
 Only the `publish` job receives `contents: write` (required to open the release);
