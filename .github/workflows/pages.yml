@@ -12,6 +12,34 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  ci-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      render: ${{ steps.scan.outputs.render }}
+    steps:
+      - name: Checkout (full clone)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Setup toolchain
+        uses: ./.github/actions/setup
+      - name: Determine change scope
+        id: scan
+        env:
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          BEFORE=$(jq -r '.before // empty' "$GITHUB_EVENT_PATH")
+          if [ -z "$BEFORE" ] || ! git rev-parse --verify -q "$BEFORE" >/dev/null 2>&1; then
+            BEFORE=4b825dc642cb6eb9a060e54bf8d69288fbee4904 # git empty-tree SHA
+          fi
+          git diff --name-only "$BEFORE" "$GITHUB_SHA" \
+            | uv run --no-sync python -m tools.ci_git_diff_scope > "$GITHUB_OUTPUT"
+
   authorize:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-latest
@@ -21,27 +49,35 @@ jobs:
         run: echo "Authorized documentation deployment from the default branch."
 
   build:
-    needs: authorize
+    needs: [authorize, ci-scan]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read
+    outputs:
+      render: ${{ needs.ci-scan.outputs.render }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - if: needs.ci-scan.outputs.render == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - uses: ./.github/actions/setup
-      - run: just sync
-      - name: Build the docs site
+      - if: needs.ci-scan.outputs.render == 'true'
+        uses: ./.github/actions/setup
+      - if: needs.ci-scan.outputs.render == 'true'
+        run: just sync
+      - if: needs.ci-scan.outputs.render == 'true'
+        name: Build the docs site
         run: just docs-check
-      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+      - if: needs.ci-scan.outputs.render == 'true'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           name: github-pages
           path: docs/_build/html
           if-no-files-found: warn
 
   deploy:
+    if: needs.build.outputs.render == 'true'
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10

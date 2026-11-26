@@ -80,6 +80,64 @@ the `test` job and all other workflows stay read-only. The GitHub Release is gat
 on the default branch and the `release` environment; the `release` environment can
 additionally require a reviewer.
 
+## Change-scope gating
+
+The workflows no longer assume every push is a full code change. A small,
+stdlib-only classifier at `tools/ci_git_diff_scope.py` looks at the paths a push
+actually touched and decides how much work the push is worth. Each workflow runs
+it once, up front, in a shared `ci-scan` job, and gates the rest of its jobs on
+the result.
+
+### The classifier
+
+`ci-scan` does a full clone (`fetch-depth: 0`) and diffs the changed paths against
+the base. On a pull request it reads the merge base from the event payload's
+`.before`; when that is absent (a first push, or a local `act` run) it falls back
+to the git empty-tree SHA `4b825dc642cb6eb9a060e54bf8d69288fbee4904`, so the diff
+is computed against an empty tree. The path list is piped into the classifier,
+which emits a `scope`/`render`/`full_gate` triple to `$GITHUB_OUTPUT`.
+
+The classifier sorts the changed paths into three tiers:
+
+| Scope | When | `full_gate` |
+|-------|------|-------------|
+| `docs` | every changed path is docs-only (`.rst`, `.md`, including CI prose such as `.github/workflows/README.md`) | `false` |
+| `other` | the set is empty, or only chore paths (`LICENSE`, `.gitignore`) | `false` |
+| `code` | anything else (the default) | `true` |
+
+`full_gate` is simply `scope == code`, so a push is treated as a full code change
+only when the classifier is sure it is one. A second signal, `render`, is `true`
+when any changed path is a Sphinx render input (`src/**/*.py`, `docs/**/*.rst`,
+`docs/conf.py`, `docs/_static/**`, `pyproject.toml`, `uv.lock`); Markdown prose
+never renders.
+
+### Per-workflow effects
+
+Each workflow wires the triple into its own `if:`/`needs:` clauses.
+
+| Workflow | Gating |
+|----------|--------|
+| `ci.yml` | `check` runs on a pull request **or** when `full_gate` is `true`; `coverage` runs only when `full_gate` is `true`. |
+| `pages.yml` | `build` and `deploy` run only when `render` is `true`, so a Markdown-only push does not rebuild the site. |
+| `release.yml` | `publish` runs only when `scope == code`. |
+
+The practical effect:
+
+- A **docs** push costs seconds. It is the only push that can rebuild and
+  republish the docs site (when the change is a render input such as an `.rst`);
+  it skips the CI matrix, the coverage gate, and the release.
+- An **other** (chore) push runs nothing heavy.
+- A **code** push is unchanged: the full matrix, coverage, and release all run.
+- **Pull requests always run the matrix.** The `check` gate stays on for PRs
+  regardless of scope, so a PR is always verified.
+
+### No new hosted action
+
+The classifier is native: it is a `git diff` piped into a stdlib Python CLI, with
+no hosted action of its own. The only hosted action it adds is the existing
+`actions/checkout@v7.0.1`, already pinned in `tests/test_ci_workflows.py`. The
+SHA-pin and forbidden-token contract in that test is therefore unchanged.
+
 ## Local smoke test with `act`
 
 Testing here is a two-layer strategy. The static policy tests in

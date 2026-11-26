@@ -8,6 +8,36 @@ permissions:
   contents: read
 
 jobs:
+  ci-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      scope: ${{ steps.scan.outputs.scope }}
+      render: ${{ steps.scan.outputs.render }}
+      full_gate: ${{ steps.scan.outputs.full_gate }}
+    steps:
+      - name: Checkout (full clone)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Setup toolchain
+        uses: ./.github/actions/setup
+      - name: Determine change scope
+        id: scan
+        env:
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          BEFORE=$(jq -r '.before // empty' "$GITHUB_EVENT_PATH")
+          if [ -z "$BEFORE" ] || ! git rev-parse --verify -q "$BEFORE" >/dev/null 2>&1; then
+            BEFORE=4b825dc642cb6eb9a060e54bf8d69288fbee4904 # git empty-tree SHA
+          fi
+          git diff --name-only "$BEFORE" "$GITHUB_SHA" \
+            | uv run --no-sync python -m tools.ci_git_diff_scope > "$GITHUB_OUTPUT"
+
   check:
     name: check (${{ matrix.os }})
     strategy:
@@ -16,6 +46,8 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    needs: ci-scan
+    if: ${{ github.event_name == 'pull_request' || needs.ci-scan.outputs.full_gate == 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -28,6 +60,8 @@ jobs:
   coverage:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    needs: ci-scan
+    if: ${{ needs.ci-scan.outputs.full_gate == 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
