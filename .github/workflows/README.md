@@ -82,7 +82,7 @@ additionally require a reviewer.
 
 ## Change-scope gating
 
-The workflows no longer assume every push is a full code change. A small,
+The workflows classify each push and run only the gates it needs. A small,
 stdlib-only classifier at `tools/ci_git_diff_scope.py` looks at the paths a push
 actually touched and decides how much work the push is worth. Each workflow runs
 it once, up front, in a shared `ci-scan` job, and gates the rest of its jobs on
