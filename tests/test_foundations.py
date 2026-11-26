@@ -31,7 +31,7 @@ from oc_selector.paths import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from conftest import HomeGuard
+    from tests.conftest import HomeGuard
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
