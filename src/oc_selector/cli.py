@@ -62,7 +62,9 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 
-# Verified OpenCode 1.x release format; rejects dev/maintenance and 2.x.
+# Accept only a clean OpenCode 1.x.y release (e.g. 1.45.0); this rejects
+# pre-release/dev suffixes (1.45.0.dev1, 1.45.0-rc1) and any 2.x line, keeping
+# OMO maintenance (upgrade/sync) pinned to the supported 1.x release channel.
 _RELEASE_RE = re.compile(r"^1\.\d+\.\d+$")
 
 # Normalizes parsed JSON values to plain typed dicts at the OMO config boundary.
